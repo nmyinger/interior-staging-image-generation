@@ -133,6 +133,7 @@ function buildNodesAndEdges(
         sourceHandle: "photo",
         target: genId,
         targetHandle: "base",
+        interactionWidth: 20,
         style: { stroke: "#94a3b8", strokeWidth: 1.5 },
       });
 
@@ -148,6 +149,7 @@ function buildNodesAndEdges(
     sourceHandle: e.source_handle ?? undefined,
     target: e.target_node,
     targetHandle: e.target_handle ?? undefined,
+    interactionWidth: 20,
     style: {
       stroke: e.target_handle === "ref" ? "#f59e0b" : "#94a3b8",
       strokeWidth: 1.5,
@@ -185,8 +187,10 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
   const [noPhotos, setNoPhotos] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [uploading, setUploading] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
   const initialized = useRef(false);
   const saveEnabled = useRef(false);
+  const dragCounter = useRef(0);
   const flowInstance = useRef<{ screenToFlowPosition: (p: { x: number; y: number }) => { x: number; y: number } } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -274,6 +278,7 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
         addEdge(
           {
             ...connection,
+            interactionWidth: 20,
             style: {
               stroke: connection.targetHandle === "ref" ? "#f59e0b" : "#94a3b8",
               strokeWidth: 1.5,
@@ -352,6 +357,7 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
             sourceHandle: "photo",
             target: genId,
             targetHandle: "base",
+            interactionWidth: 20,
             style: { stroke: "#94a3b8", strokeWidth: 1.5 },
           },
           eds
@@ -391,6 +397,8 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
   const onDrop = useCallback(
     async (event: React.DragEvent) => {
       event.preventDefault();
+      dragCounter.current = 0;
+      setIsDraggingFile(false);
       const files = Array.from(event.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
       if (!files.length || !flowInstance.current) return;
       setUploading(true);
@@ -409,6 +417,23 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const onDragEnter = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    dragCounter.current += 1;
+    const hasFiles = Array.from(event.dataTransfer.items).some(
+      (item) => item.kind === "file" && item.type.startsWith("image/")
+    );
+    if (hasFiles) setIsDraggingFile(true);
+  }, []);
+
+  const onDragLeave = useCallback(() => {
+    dragCounter.current -= 1;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setIsDraggingFile(false);
+    }
   }, []);
 
   const handleFileInput = useCallback(
@@ -466,7 +491,7 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
   }
 
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full relative">
       <input
         ref={fileInputRef}
         type="file"
@@ -475,6 +500,14 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
         className="hidden"
         onChange={handleFileInput}
       />
+      {isDraggingFile && (
+        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-violet-50/60 border-2 border-dashed border-violet-400 rounded-lg m-2">
+          <div className="flex flex-col items-center gap-2 text-violet-600">
+            <Upload size={32} />
+            <p className="text-sm font-medium">Drop to add photo</p>
+          </div>
+        </div>
+      )}
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -490,6 +523,8 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
         onInit={(instance) => { flowInstance.current = instance; }}
         onDrop={onDrop}
         onDragOver={onDragOver}
+        onDragEnter={onDragEnter}
+        onDragLeave={onDragLeave}
       >
         <Background gap={20} color="#e2e8f0" />
         <Controls />
