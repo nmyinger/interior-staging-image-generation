@@ -11,6 +11,7 @@ Cost profile:
   Caching: all results cached; re-runs only pay for new image generation
 """
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -19,6 +20,11 @@ from config import SOURCE_DIR, OUTPUTS_DIR, CACHE_DIR, ZONES
 from analyze import run_analysis, group_by_zone
 from manifest import generate_manifest, generate_photo_manifests
 from stage import stage_zone
+
+
+def _stage_one_zone(args: tuple) -> tuple[str, list]:
+    zone, paths, manifest_text, analysis, photo_manifests = args
+    return zone, stage_zone(zone, paths, manifest_text, analysis, photo_manifests)
 
 
 def main():
@@ -58,15 +64,24 @@ def main():
     # Step 4: Stage per zone (image generation, outputs cached per file)
     print("\n[4/4] Staging zones...")
     total = 0
-    for zone, paths in zones.items():
-        if zone_filter and zone != zone_filter:
-            continue
-        display = ZONES[zone]["display"]
-        print(f"\n  Zone: {display} ({len(paths)} photo(s))")
-        manifest_text = zone_manifests.get(zone, zone_manifests.get("full", ""))
-        staged = stage_zone(zone, paths, manifest_text, analysis, photo_manifests)
-        total += len(staged)
-        print(f"  → {len(staged)} staged")
+
+    zone_args = [
+        (
+            zone,
+            paths,
+            zone_manifests.get(zone, zone_manifests.get("full", "")),
+            analysis,
+            photo_manifests,
+        )
+        for zone, paths in zones.items()
+        if not zone_filter or zone == zone_filter
+    ]
+
+    with ThreadPoolExecutor(max_workers=len(zone_args) or 1) as executor:
+        for zone, staged in executor.map(_stage_one_zone, zone_args):
+            total += len(staged)
+            display = ZONES[zone]["display"]
+            print(f"\n  Zone: {display} ({len(staged)} staged)")
 
     print(f"\n{'='*50}")
     print(f"Done. {total} photos staged.")

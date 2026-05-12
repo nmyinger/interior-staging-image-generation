@@ -10,6 +10,7 @@ Cached to .cache/manifest.json and .cache/photo_manifests.json.
 """
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from google import genai
 from google.genai import types
@@ -71,6 +72,13 @@ This photo's spatial analysis:
 Output ONLY the furniture pieces that belong in this specific camera frame — the ones listed under "Furniture visible in this frame." For each piece include: type, exact color (hex), material, approximate dimensions, and any key style detail. Keep it to 3–5 items. No headers, no explanation, just the list."""
 
 
+def _fetch_photo_manifest(args: tuple) -> tuple[str, str]:
+    filename, prompt = args
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    resp = client.models.generate_content(model=MODEL_TEXT, contents=[prompt])
+    return filename, resp.text.strip()
+
+
 def generate_manifest(force: bool = False) -> dict:
     """
     Returns {"master": str, "full": str, "open_plan": str, "bedroom": str, "bathroom_suite": str}.
@@ -123,9 +131,7 @@ def generate_photo_manifests(analysis: dict, zone_manifests: dict, force: bool =
         print("  (loaded from cache)")
         return json.loads(cache_path.read_text())
 
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    result = {}
-
+    work_items: list[tuple[str, str]] = []
     for filename, data in sorted(analysis.items()):
         rt = data.get("room_type", "skip")
         if rt == "skip":
@@ -144,10 +150,15 @@ def generate_photo_manifests(analysis: dict, zone_manifests: dict, force: bool =
             frame_composition=sp.get("frame_composition", "not specified"),
             furniture_zones=fz or "place appropriately for this angle",
         )
+        work_items.append((filename, prompt))
 
-        resp = client.models.generate_content(model=MODEL_TEXT, contents=[prompt])
-        result[filename] = resp.text.strip()
-        print(f"    {filename}: {resp.text.strip()[:80]}...")
+    result = {}
+    with ThreadPoolExecutor(max_workers=len(work_items) or 1) as executor:
+        futures = {executor.submit(_fetch_photo_manifest, item): item[0] for item in work_items}
+        for future in as_completed(futures):
+            filename, manifest = future.result()
+            result[filename] = manifest
+            print(f"    {filename}: {manifest[:80]}...")
 
     cache_path.write_text(json.dumps(result, indent=2))
     return result

@@ -235,8 +235,8 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
     }
   }, [loadCanvas]);
 
-  const debouncedEdges = useDebounce(edges, 1500);
-  const debouncedNodes = useDebounce(nodes, 1500);
+  const debouncedEdges = useDebounce(edges, 500);
+  const debouncedNodes = useDebounce(nodes, 500);
 
   useEffect(() => {
     if (saveState === "saved") {

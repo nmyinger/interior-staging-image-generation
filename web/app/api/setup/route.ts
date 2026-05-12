@@ -5,7 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { sql, migrate } from "@/lib/db";
-import fs from "fs";
+import { readFile, readdir } from "fs/promises";
 import path from "path";
 
 const PHOTOS_DIR = path.resolve(process.cwd(), "../Source Photos");
@@ -23,41 +23,45 @@ const ROOM_TO_ZONE: Record<string, string> = {
 export async function GET() {
   await migrate();
 
-  let analysis: Record<string, { room_type: string }> = {};
-  let photoManifests: Record<string, string> = {};
-  try {
-    analysis = JSON.parse(fs.readFileSync(path.join(CACHE_DIR, "analysis.json"), "utf-8"));
-  } catch {}
-  try {
-    photoManifests = JSON.parse(fs.readFileSync(path.join(CACHE_DIR, "photo_manifests.json"), "utf-8"));
-  } catch {}
+  const [analysisRaw, manifestsRaw] = await Promise.all([
+    readFile(path.join(CACHE_DIR, "analysis.json"), "utf-8").catch(() => "{}"),
+    readFile(path.join(CACHE_DIR, "photo_manifests.json"), "utf-8").catch(() => "{}"),
+  ]);
+  const analysis: Record<string, { room_type: string }> = JSON.parse(analysisRaw);
+  const photoManifests: Record<string, string> = JSON.parse(manifestsRaw);
 
-  const files = fs
-    .readdirSync(PHOTOS_DIR)
+  const allFiles = (await readdir(PHOTOS_DIR))
     .filter((f) => /\.(jpg|jpeg|png)$/i.test(f) && !SKIP.has(f))
     .sort();
 
-  let seeded = 0;
-  for (const filename of files) {
-    const existing = await sql`SELECT filename FROM photos WHERE filename = ${filename}`;
-    if (existing.length > 0) continue;
+  const existingRows = allFiles.length > 0
+    ? await sql`SELECT filename FROM photos WHERE filename = ANY(${allFiles})`
+    : [];
+  const existingSet = new Set(existingRows.map((r) => r.filename as string));
+  const newFiles = allFiles.filter((f) => !existingSet.has(f));
 
-    const filePath = path.join(PHOTOS_DIR, filename);
-    const bytes = fs.readFileSync(filePath);
-    const b64 = bytes.toString("base64");
-    const ext = path.extname(filename).toLowerCase();
-    const mime = ext === ".png" ? "image/png" : "image/jpeg";
-    const roomType = analysis[filename]?.room_type ?? "unknown";
-    const zone = ROOM_TO_ZONE[roomType] ?? "unknown";
-    const defaultPrompt = photoManifests[filename] ?? "";
+  const photoBuffers = await Promise.all(
+    newFiles.map((filename) =>
+      readFile(path.join(PHOTOS_DIR, filename)).then((bytes) => ({ filename, bytes }))
+    )
+  );
 
-    await sql`
-      INSERT INTO photos (filename, room_type, zone, default_prompt, image_b64, mime_type)
-      VALUES (${filename}, ${roomType}, ${zone}, ${defaultPrompt}, ${b64}, ${mime})
-      ON CONFLICT (filename) DO NOTHING
-    `;
-    seeded++;
-  }
+  await Promise.all(
+    photoBuffers.map(({ filename, bytes }) => {
+      const b64 = bytes.toString("base64");
+      const ext = path.extname(filename).toLowerCase();
+      const mime = ext === ".png" ? "image/png" : "image/jpeg";
+      const roomType = analysis[filename]?.room_type ?? "unknown";
+      const zone = ROOM_TO_ZONE[roomType] ?? "unknown";
+      const defaultPrompt = photoManifests[filename] ?? "";
 
-  return NextResponse.json({ ok: true, migrationsRun: true, photosSeeded: seeded });
+      return sql`
+        INSERT INTO photos (filename, room_type, zone, default_prompt, image_b64, mime_type)
+        VALUES (${filename}, ${roomType}, ${zone}, ${defaultPrompt}, ${b64}, ${mime})
+        ON CONFLICT (filename) DO NOTHING
+      `;
+    })
+  );
+
+  return NextResponse.json({ ok: true, migrationsRun: true, photosSeeded: newFiles.length });
 }
