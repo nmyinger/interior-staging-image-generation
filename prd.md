@@ -43,20 +43,20 @@ Chosen over `gemini-2.5-flash-image` because:
 
 ---
 
-## Pipeline (v4)
+## Pipeline (v5)
 
 ### Step 1 — Batch Analysis (1 API call, cached)
 `analyze.py`: One Gemini text call with all stageable photos. Returns classify + spatial analysis for every photo simultaneously. Cached to `.cache/analysis.json` — free on re-runs.
 
 ### Step 2 — Apartment Manifest (1 API call, cached)
-`manifest.py`: One Gemini text call with all photos. Returns a master palette and per-zone furniture identity spec (hex colors, materials, dims, silhouette). Cached to `.cache/manifest.json`.
+`manifest.py`: One Gemini text call with all photos. Returns a master palette (PART 1) and per-zone furniture identity spec (hex colors, materials, dims, silhouette) (PART 2). Per-zone manifest always includes the master palette prepended for apartment-wide style anchoring. Cached to `.cache/manifest.json`.
 
 ### Step 3 — Stage per Zone
 `stage.py`: Per-zone image generation with output caching.
-- **Hero**: `[manifest + spatial plan + empty room]` → staged; cached per file
-- **Catalog**: Extract per-object tile grid from hero (Gemini vision, cached)
-- **Rest**: `[empty room FIRST, catalog grid SECOND]` + spatial plan + count locks; cached
-- **Bathroom closet**: `[empty closet, staged bathroom]` so doorway accessories match
+- **Heroes**: One per sub-area (kitchen hero + living room hero for open_plan; bathroom hero for bathroom_suite). `[manifest + spatial plan + empty room]` → staged; cached per file. For bathroom_suite, hero is always the bathroom interior (not closet).
+- **Catalog**: Merged tile grid extracted from ALL zone heroes (one Gemini vision call per hero, merged into one grid). Cached to `.cache/catalog_{zone}.json`.
+- **Rest**: `[empty room, sub-area staged hero, merged catalog]` — canvas first, identity reference second, tile supplement third; cached per file.
+- **Bathroom closet**: `[empty closet, staged bathroom]` so doorway accessories match.
 
 ---
 

@@ -1,12 +1,12 @@
 """
-Virtual Staging Pipeline — v4
+Virtual Staging Pipeline — v5
 Usage:
   python3 main.py           # uses cached analysis/manifest; skips existing outputs
   python3 main.py --force   # regenerates everything from scratch
 
 Cost profile:
   Text calls  (cheap): 1 batch analysis + 1 manifest = 2 Gemini text calls total
-  Image calls ($0.039 each): 1 hero per zone + N remaining photos
+  Image calls ($0.039 each): 1 hero per sub-area per zone + N remaining photos
   Caching: all text results and staged images are cached; re-runs only pay
            for genuinely new image generation calls
 """
@@ -25,7 +25,7 @@ from stage import stage_zone
 def main():
     force = "--force" in sys.argv
 
-    print("Virtual Staging Pipeline v4")
+    print("Virtual Staging Pipeline v5")
     print("=" * 50)
     if force:
         print("  --force: regenerating all cached results")

@@ -8,6 +8,7 @@ Single call with all stageable photos. Produces:
 Cached to .cache/manifest.json. Only re-runs if cache is missing or force=True.
 """
 import json
+import re
 from pathlib import Path
 from google import genai
 from google.genai import types
@@ -56,7 +57,8 @@ Output ONLY the Markdown brief. No preamble."""
 
 def generate_manifest(force: bool = False) -> dict:
     """
-    Returns {"master": str, "open_plan": str, "bedroom": str, "bathroom_suite": str}.
+    Returns {"master": str, "full": str, "open_plan": str, "bedroom": str, "bathroom_suite": str}.
+    Each zone value includes the master palette prepended for cross-zone consistency.
     Cached to .cache/manifest.json.
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -65,7 +67,6 @@ def generate_manifest(force: bool = False) -> dict:
     if not force and cache_path.exists():
         print("  (loaded from cache)")
         data = json.loads(cache_path.read_text())
-        # also write per-zone markdown files for inspection
         _write_outputs(data)
         return data
 
@@ -84,32 +85,52 @@ def generate_manifest(force: bool = False) -> dict:
     )
 
     full_text = response.text.strip()
+    master = _extract_master_section(full_text)
 
-    # Split into master palette + per-zone sections
-    result = {"full": full_text}
+    result = {"full": full_text, "master": master}
     for zone in ZONES:
-        result[zone] = _extract_zone_section(full_text, zone)
+        zone_section = _extract_zone_section(full_text, zone)
+        # Prepend master palette so every image generation call has apartment-wide
+        # style anchors (wood tone, metal finish, accent hex) alongside zone specifics.
+        result[zone] = f"{master}\n\n{zone_section}" if master != full_text else zone_section
 
     cache_path.write_text(json.dumps(result, indent=2))
     _write_outputs(result)
     return result
 
 
+def _extract_master_section(text: str) -> str:
+    """Extract PART 1 (master palette) — everything before PART 2."""
+    idx = text.find("## PART 2")
+    if idx > 0:
+        return text[:idx].strip()
+    return text
+
+
 def _extract_zone_section(text: str, zone: str) -> str:
-    """Extract the zone-specific section from the full manifest."""
+    """Extract the zone-specific section using heading-based line parsing."""
     zone_display = zone.replace("_", " ")
     lines = text.split("\n")
-    in_section = False
-    section_lines = []
-    for line in lines:
-        lower = line.lower()
-        if zone_display in lower or zone in lower:
-            in_section = True
-        elif in_section and line.startswith("## ") and zone_display not in lower and zone not in lower:
+    section_start = None
+    section_end = None
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped.startswith("#"):
+            continue
+        heading_text = stripped.lstrip("#").strip().lower()
+        is_zone_heading = zone_display in heading_text or zone in heading_text
+        if is_zone_heading:
+            if section_start is None:
+                section_start = i
+        elif section_start is not None and section_end is None:
+            section_end = i
             break
-        if in_section:
-            section_lines.append(line)
-    return "\n".join(section_lines).strip() if section_lines else text
+
+    if section_start is None:
+        return text
+    end = section_end if section_end is not None else len(lines)
+    return "\n".join(lines[section_start:end]).strip()
 
 
 def _write_outputs(data: dict) -> None:
