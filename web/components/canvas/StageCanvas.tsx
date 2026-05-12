@@ -59,6 +59,8 @@ const ZONE_COLORS: Record<string, string> = {
 };
 
 const COL_X = { source: 60, gen: 320 };
+const miniMapNodeColor = (n: { type?: string }) =>
+  n.type === "sourceNode" ? "#94a3b8" : "#7c3aed";
 const ROW_H = 260;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -529,7 +531,7 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
         <Background gap={20} color="#e2e8f0" />
         <Controls />
         <MiniMap
-          nodeColor={(n) => (n.type === "sourceNode" ? "#94a3b8" : "#7c3aed")}
+          nodeColor={miniMapNodeColor}
           className="!rounded-lg"
         />
         <Panel position="top-left">

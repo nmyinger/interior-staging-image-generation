@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback } from "react";
+import { memo, useCallback } from "react";
 import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { SourceNodeData } from "@/types/nodes";
 
-export function SourceNode({ id, data }: NodeProps) {
+export const SourceNode = memo(function SourceNode({ id, data }: NodeProps) {
   const d = data as unknown as SourceNodeData;
   const { deleteElements } = useReactFlow();
 
@@ -54,4 +54,4 @@ export function SourceNode({ id, data }: NodeProps) {
       />
     </div>
   );
-}
+});

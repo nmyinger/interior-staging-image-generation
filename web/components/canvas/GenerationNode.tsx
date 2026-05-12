@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { Loader2, Sparkles, Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,10 @@ function StatusDot({ status }: { status: NodeStatus }) {
   return <div className={`w-2 h-2 rounded-full shrink-0 ${cls}`} />;
 }
 
-export function GenerationNode({ id, data }: NodeProps) {
+const HANDLE_BASE_STYLE = { top: "30%" };
+const HANDLE_REF_STYLE = { top: "60%" };
+
+export const GenerationNode = memo(function GenerationNode({ id, data }: NodeProps) {
   const d = data as unknown as GenerationNodeData;
   const { getEdges, getNode, deleteElements, updateNodeData } = useReactFlow();
   const [prompt, setPrompt] = useState(d.prompt);
@@ -109,7 +112,7 @@ export function GenerationNode({ id, data }: NodeProps) {
         type="target"
         position={Position.Left}
         id="base"
-        style={{ top: "30%" }}
+        style={HANDLE_BASE_STYLE}
         className="!w-3 !h-3 !bg-slate-400"
         title="Base photo"
       />
@@ -117,7 +120,7 @@ export function GenerationNode({ id, data }: NodeProps) {
         type="target"
         position={Position.Left}
         id="ref"
-        style={{ top: "60%" }}
+        style={HANDLE_REF_STYLE}
         className="!w-3 !h-3 !bg-amber-400"
         title="Reference (style)"
       />
@@ -169,4 +172,4 @@ export function GenerationNode({ id, data }: NodeProps) {
       />
     </div>
   );
-}
+});
