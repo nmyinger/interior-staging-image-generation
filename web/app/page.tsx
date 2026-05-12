@@ -1,4 +1,5 @@
-import { StageCanvas } from "@/components/canvas/StageCanvas";
+import { LoginGate } from "@/components/LoginGate";
+import { UserMenu } from "@/components/UserMenu";
 
 export default function Home() {
   return (
@@ -10,14 +11,13 @@ export default function Home() {
           </div>
           <span className="text-sm font-semibold text-slate-800">Virtual Staging</span>
         </div>
-        <div className="ml-auto flex items-center gap-3 text-xs text-slate-400">
-          <span>drag from node handles to connect references</span>
-          <span className="inline-block border-t-2 border-dashed border-amber-400 w-6" />
-          <span className="text-amber-500">style reference</span>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-xs text-slate-400 hidden sm:block">drag handles to connect references</span>
+          <UserMenu />
         </div>
       </header>
       <div className="flex-1 min-h-0">
-        <StageCanvas />
+        <LoginGate />
       </div>
     </main>
   );

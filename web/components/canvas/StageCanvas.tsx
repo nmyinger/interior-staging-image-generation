@@ -159,7 +159,7 @@ function useDebounce<T>(value: T, ms: number) {
   return debounced;
 }
 
-export function StageCanvas() {
+export function StageCanvas({ userId: _userId }: { userId: string }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [loading, setLoading] = useState(true);

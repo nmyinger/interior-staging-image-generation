@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { GoogleGenAI } from "@google/genai";
 import { sql } from "@/lib/db";
 
 const MODEL_IMAGE = "gemini-3.1-flash-image-preview";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function userId(session: any) {
+  return (session?.user as { id?: string } | undefined)?.id;
+}
+
 export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  const uid = userId(session);
+  if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { baseFilename, referenceDataUrl, prompt } = await req.json();
 
   if (!baseFilename || !prompt) {
@@ -58,9 +69,9 @@ export async function POST(req: NextRequest) {
 
         // Persist output to DB
         await sql`
-          INSERT INTO generations (filename, prompt, output_b64, updated_at)
-          VALUES (${baseFilename}, ${prompt}, ${outputB64}, NOW())
-          ON CONFLICT (filename) DO UPDATE
+          INSERT INTO generations (user_id, filename, prompt, output_b64, updated_at)
+          VALUES (${uid}, ${baseFilename}, ${prompt}, ${outputB64}, NOW())
+          ON CONFLICT (user_id, filename) DO UPDATE
             SET prompt = EXCLUDED.prompt,
                 output_b64 = EXCLUDED.output_b64,
                 updated_at = NOW()
