@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
-import fs from "fs";
-import path from "path";
+import { sql } from "@/lib/db";
 
-const PHOTOS_DIR = path.resolve(process.cwd(), "../Source Photos");
 const MODEL_IMAGE = "gemini-3.1-flash-image-preview";
 
 export async function POST(req: NextRequest) {
@@ -18,23 +16,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "GEMINI_API_KEY not configured" }, { status: 500 });
   }
 
-  const basePath = path.join(PHOTOS_DIR, baseFilename);
-  if (!fs.existsSync(basePath)) {
+  // Load base photo from DB
+  const rows = await sql`SELECT image_b64, mime_type FROM photos WHERE filename = ${baseFilename}`;
+  if (!rows.length) {
     return NextResponse.json({ error: `Photo not found: ${baseFilename}` }, { status: 404 });
   }
+  const { image_b64: baseB64, mime_type: baseMime } = rows[0];
 
   const ai = new GoogleGenAI({ apiKey });
-  const baseBytes = fs.readFileSync(basePath);
-  const baseB64 = baseBytes.toString("base64");
 
   type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
   const parts: Part[] = [
     { text: prompt },
-    { inlineData: { mimeType: "image/jpeg", data: baseB64 } },
+    { inlineData: { mimeType: baseMime as string, data: baseB64 as string } },
   ];
 
   if (referenceDataUrl) {
-    const match = referenceDataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    const match = (referenceDataUrl as string).match(/^data:([^;]+);base64,(.+)$/);
     if (match) {
       parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
     }
@@ -55,7 +53,20 @@ export async function POST(req: NextRequest) {
 
     for (const part of candidates[0].content?.parts ?? []) {
       if (part.inlineData?.data) {
-        const dataUrl = `data:${part.inlineData.mimeType ?? "image/jpeg"};base64,${part.inlineData.data}`;
+        const outputB64 = part.inlineData.data;
+        const outputMime = part.inlineData.mimeType ?? "image/jpeg";
+
+        // Persist output to DB
+        await sql`
+          INSERT INTO generations (filename, prompt, output_b64, updated_at)
+          VALUES (${baseFilename}, ${prompt}, ${outputB64}, NOW())
+          ON CONFLICT (filename) DO UPDATE
+            SET prompt = EXCLUDED.prompt,
+                output_b64 = EXCLUDED.output_b64,
+                updated_at = NOW()
+        `;
+
+        const dataUrl = `data:${outputMime};base64,${outputB64}`;
         return NextResponse.json({ imageDataUrl: dataUrl });
       }
     }
