@@ -21,12 +21,15 @@ import { Button } from "@/components/ui/button";
 
 import { SourceNode } from "./SourceNode";
 import { GenerationNode } from "./GenerationNode";
+import { DeletableEdge } from "./DeletableEdge";
 import type { SourceNodeData, GenerationNodeData } from "@/types/nodes";
 
 const nodeTypes: NodeTypes = {
   sourceNode: SourceNode,
   generationNode: GenerationNode,
 };
+
+const edgeTypes = { deletable: DeletableEdge };
 
 interface PhotoRow {
   filename: string;
@@ -51,16 +54,9 @@ interface EdgeRow {
   target_handle: string | null;
 }
 
-const ZONE_COLORS: Record<string, string> = {
-  open_plan:      "#4a7050", // sage
-  bedroom:        "#4a6b96", // dusty blue
-  bathroom_suite: "#3d7d7d", // soft teal
-  unknown:        "#78716c", // warm stone
-};
-
 const COL_X = { source: 60, gen: 320 };
 const miniMapNodeColor = (n: { type?: string }) =>
-  n.type === "sourceNode" ? "#78716c" : "#4a7050";
+  n.type === "sourceNode" ? "#a8a29e" : "#6b8a68";
 const ROW_H = 260;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -81,9 +77,7 @@ function buildNodesAndEdges(
     (byZone[p.zone] ??= []).push(p);
   }
 
-  for (const [zone, group] of Object.entries(byZone)) {
-    const color = ZONE_COLORS[zone] ?? ZONE_COLORS.unknown;
-
+  for (const group of Object.values(byZone)) {
     for (const photo of group) {
       const srcId = `src-${photo.filename}`;
       const genId = `gen-${photo.filename}`;
@@ -93,19 +87,19 @@ function buildNodesAndEdges(
       const saved = generations[photo.filename];
       const genY = saved ? saved.node_y : y;
       const srcPos = srcPositions[srcId] ?? { x: COL_X.source, y: genY };
+      const thumbUrl = `/api/photos/${encodeURIComponent(photo.filename)}?w=400`;
 
       const srcData: SourceNodeData = {
         filename: photo.filename,
         roomType: photo.room_type,
         label: photo.filename,
-        photoUrl: `/api/photos/${encodeURIComponent(photo.filename)}`,
+        photoUrl: thumbUrl,
       };
       nodes.push({
         id: srcId,
         type: "sourceNode",
         position: srcPos,
         data: srcData as unknown as Record<string, unknown>,
-        style: { borderColor: color },
       });
 
       const outputDataUrl = saved?.output_b64
@@ -116,7 +110,7 @@ function buildNodesAndEdges(
         filename: photo.filename,
         roomType: photo.room_type,
         label: photo.filename,
-        sourcePhotoUrl: `/api/photos/${encodeURIComponent(photo.filename)}`,
+        sourcePhotoUrl: thumbUrl,
         prompt: saved?.prompt || photo.default_prompt,
         status: outputDataUrl ? "done" : "idle",
         outputImageUrl: outputDataUrl,
@@ -126,7 +120,6 @@ function buildNodesAndEdges(
         type: "generationNode",
         position: { x: saved ? saved.node_x : COL_X.gen, y: genY },
         data: genData as unknown as Record<string, unknown>,
-        style: { borderColor: color },
       });
 
       autoEdges.push({
@@ -136,7 +129,7 @@ function buildNodesAndEdges(
         target: genId,
         targetHandle: "base",
         interactionWidth: 20,
-        style: { stroke: "#94a3b8", strokeWidth: 1.5 },
+        style: { stroke: "var(--color-stone-300)", strokeWidth: 1.5 },
       });
 
       y += ROW_H;
@@ -144,16 +137,16 @@ function buildNodesAndEdges(
     y += 40;
   }
 
-  // Restore saved edges (user-drawn references)
   const restoredEdges: Edge[] = dbEdges.map((e) => ({
     id: e.id,
     source: e.source_node,
     sourceHandle: e.source_handle ?? undefined,
     target: e.target_node,
     targetHandle: e.target_handle ?? undefined,
+    type: "deletable",
     interactionWidth: 20,
     style: {
-      stroke: e.target_handle === "ref" ? "#f59e0b" : "#94a3b8",
+      stroke: e.target_handle === "ref" ? "var(--color-acacia-400)" : "var(--color-stone-300)",
       strokeWidth: 1.5,
       strokeDasharray: e.target_handle === "ref" ? "5 3" : undefined,
     },
@@ -170,7 +163,6 @@ function loadHiddenSources(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem("canvas-hidden-sources") ?? "[]")); } catch { return new Set(); }
 }
 
-// Debounce canvas save
 function useDebounce<T>(value: T, ms: number) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -280,9 +272,10 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
         addEdge(
           {
             ...connection,
+            type: "deletable",
             interactionWidth: 20,
             style: {
-              stroke: connection.targetHandle === "ref" ? "#f59e0b" : "#94a3b8",
+              stroke: connection.targetHandle === "ref" ? "var(--color-acacia-400)" : "var(--color-stone-300)",
               strokeWidth: 1.5,
               strokeDasharray: connection.targetHandle === "ref" ? "5 3" : undefined,
             },
@@ -306,27 +299,27 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
       const srcId = `src-${photo.filename}`;
       const genId = `gen-${photo.filename}`;
 
-      // Unhide if previously hidden
       try {
         const hidden: string[] = JSON.parse(localStorage.getItem("canvas-hidden-sources") ?? "[]");
         const filtered = hidden.filter((id) => id !== srcId);
         localStorage.setItem("canvas-hidden-sources", JSON.stringify(filtered));
       } catch {}
 
+      const thumbUrl = `/api/photos/${encodeURIComponent(photo.filename)}?w=400`;
+
       setNodes((nds) => {
         if (nds.some((n) => n.id === srcId)) return nds;
-        const color = ZONE_COLORS[photo.zone] ?? ZONE_COLORS.unknown;
         const srcData: SourceNodeData = {
           filename: photo.filename,
           roomType: photo.room_type,
           label: photo.filename,
-          photoUrl: `/api/photos/${encodeURIComponent(photo.filename)}`,
+          photoUrl: thumbUrl,
         };
         const genData: GenerationNodeData = {
           filename: photo.filename,
           roomType: photo.room_type,
           label: photo.filename,
-          sourcePhotoUrl: `/api/photos/${encodeURIComponent(photo.filename)}`,
+          sourcePhotoUrl: thumbUrl,
           prompt: photo.default_prompt,
           status: "idle",
         };
@@ -337,14 +330,12 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
             type: "sourceNode",
             position,
             data: srcData as unknown as Record<string, unknown>,
-            style: { borderColor: color },
           },
           {
             id: genId,
             type: "generationNode",
             position: { x: position.x + 280, y: position.y },
             data: genData as unknown as Record<string, unknown>,
-            style: { borderColor: color },
           },
         ];
       });
@@ -360,7 +351,7 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
             target: genId,
             targetHandle: "base",
             interactionWidth: 20,
-            style: { stroke: "#94a3b8", strokeWidth: 1.5 },
+            style: { stroke: "var(--color-stone-300)", strokeWidth: 1.5 },
           },
           eds
         );
@@ -461,7 +452,7 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center text-slate-400">
+      <div className="h-full flex items-center justify-center text-stone-400">
         <Loader2 className="animate-spin mr-2" size={18} />
         Loading canvas…
       </div>
@@ -470,7 +461,7 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
 
   if (loadError) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-4 text-slate-500">
+      <div className="h-full flex flex-col items-center justify-center gap-4 text-stone-500">
         <AlertCircle size={40} className="text-clay-400" />
         <p className="text-sm text-clay-500">{loadError}</p>
         <Button onClick={loadCanvas} className="bg-sage-600 hover:bg-sage-700 text-white">
@@ -482,8 +473,8 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
 
   if (noPhotos) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-4 text-slate-500">
-        <Database size={40} className="text-slate-300" />
+      <div className="h-full flex flex-col items-center justify-center gap-4 text-stone-500">
+        <Database size={40} className="text-stone-300" />
         <p className="text-sm">No photos in database yet.</p>
         <Button onClick={seedPhotos} disabled={seeding} className="bg-sage-600 hover:bg-sage-700 text-white">
           {seeding ? <><Loader2 size={14} className="mr-2 animate-spin" />Seeding…</> : "Seed photos from Source Photos/"}
@@ -503,11 +494,8 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
         onChange={handleFileInput}
       />
       {isDraggingFile && (
-        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-sage-50/60 border-2 border-dashed border-sage-400 rounded-lg m-2">
-          <div className="flex flex-col items-center gap-2 text-sage-600">
-            <Upload size={32} />
-            <p className="text-sm font-medium">Drop to add photo</p>
-          </div>
+        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-stone-50/80 border-2 border-dashed border-stone-300 rounded-lg m-2">
+          <Upload size={28} className="text-stone-400" />
         </div>
       )}
       <ReactFlow
@@ -517,6 +505,7 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         fitView
         fitViewOptions={{ padding: 0.15 }}
         minZoom={0.2}
@@ -528,37 +517,31 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
         onDragEnter={onDragEnter}
         onDragLeave={onDragLeave}
       >
-        <Background gap={20} color="#e2e8f0" />
+        <Background gap={20} color="var(--color-stone-200)" />
         <Controls />
         <MiniMap
           nodeColor={miniMapNodeColor}
           className="!rounded-lg"
         />
         <Panel position="top-left">
-          <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg shadow-sm border border-slate-200">
+          <div className="flex items-center gap-2 px-2.5 py-2 bg-white rounded-lg shadow-sm border border-stone-200">
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="flex items-center gap-1.5 text-xs font-medium text-stone-600 hover:text-sage-600 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-sage-600 disabled:opacity-50 transition-colors"
+              title="Add photo"
             >
-              {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
-              Add Photo
+              {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
             </button>
-            <span className="w-px h-4 bg-slate-200" />
+            {saveState !== "idle" && <span className="w-px h-3.5 bg-stone-200" />}
             {saveState === "saving" && (
-              <span className="flex items-center gap-1 text-xs text-slate-400">
-                <Loader2 size={10} className="animate-spin" /> Saving…
-              </span>
+              <Loader2 size={10} className="animate-spin text-stone-400" />
             )}
             {saveState === "saved" && (
-              <span className="flex items-center gap-1 text-xs text-moss-500">
-                <Check size={10} /> Saved
-              </span>
+              <Check size={10} className="text-moss-500" />
             )}
             {saveState === "error" && (
-              <span className="flex items-center gap-1 text-xs text-clay-400">
-                <AlertCircle size={10} /> Save failed
-              </span>
+              <AlertCircle size={10} className="text-clay-400" />
             )}
           </div>
         </Panel>

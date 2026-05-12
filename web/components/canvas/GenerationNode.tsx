@@ -5,7 +5,6 @@ import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { Loader2, Sparkles, Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import type { GenerationNodeData, NodeStatus } from "@/types/nodes";
 
 function StatusDot({ status }: { status: NodeStatus }) {
@@ -75,26 +74,17 @@ export const GenerationNode = memo(function GenerationNode({ id, data }: NodePro
     : "Generate";
 
   return (
-    <div className="bg-white border-2 border-sage-200 rounded-xl shadow-sm w-72 overflow-hidden">
-      {/* Header */}
+    <div className="bg-white border-2 border-sage-200 rounded-xl shadow-sm w-64 overflow-hidden">
       <div className="px-3 py-2 bg-sage-50 border-b border-sage-200 flex items-center justify-between">
-        <div className="min-w-0 flex items-center gap-2">
-          <StatusDot status={status} />
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-sage-800 truncate">{d.filename}</p>
-            <Badge variant="outline" className="mt-1 text-[10px] border-sage-300 text-sage-600">
-              {d.roomType.replace("_", " ")}
-            </Badge>
-          </div>
-        </div>
-        <div className="flex items-center gap-1 ml-2 shrink-0">
+        <StatusDot status={status} />
+        <div className="flex items-center gap-1.5">
           {status === "done" && (
             <button
               onClick={download}
-              className="text-sage-400 hover:text-sage-600 nodrag"
+              className="text-stone-400 hover:text-sage-600 transition-colors nodrag"
               title="Download staged image"
             >
-              <Download size={14} />
+              <Download size={13} />
             </button>
           )}
           <button
@@ -102,12 +92,11 @@ export const GenerationNode = memo(function GenerationNode({ id, data }: NodePro
             className="text-stone-300 hover:text-clay-400 transition-colors nodrag"
             title="Delete node"
           >
-            <X size={14} />
+            <X size={13} />
           </button>
         </div>
       </div>
 
-      {/* Input handles */}
       <Handle
         type="target"
         position={Position.Left}
@@ -125,7 +114,6 @@ export const GenerationNode = memo(function GenerationNode({ id, data }: NodePro
         title="Reference (style)"
       />
 
-      {/* Prompt */}
       <div className="p-3 space-y-2">
         <Textarea
           value={prompt}
@@ -133,8 +121,8 @@ export const GenerationNode = memo(function GenerationNode({ id, data }: NodePro
             setPrompt(e.target.value);
             updateNodeData(id, { ...d, prompt: e.target.value });
           }}
-          placeholder="Describe what to stage in this photo..."
-          className="text-xs resize-none h-24 nodrag"
+          placeholder="Describe the staging…"
+          className="text-xs resize-none h-20 nodrag"
           onMouseDown={(e) => e.stopPropagation()}
         />
         <Button
@@ -154,15 +142,13 @@ export const GenerationNode = memo(function GenerationNode({ id, data }: NodePro
         )}
       </div>
 
-      {/* Output image */}
       {outputUrl && (
         <div className="border-t border-sage-100">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={outputUrl} alt="staged" className="w-full object-cover" />
+          <img src={outputUrl} alt="staged" loading="lazy" className="w-full max-h-48 object-cover block" />
         </div>
       )}
 
-      {/* Output handle */}
       <Handle
         type="source"
         position={Position.Right}

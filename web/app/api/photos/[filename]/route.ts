@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import sharp from "sharp";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ filename: string }> }
 ) {
   const { filename } = await params;
@@ -13,7 +14,16 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   const { image_b64, mime_type } = rows[0];
-  const buffer = Buffer.from(image_b64 as string, "base64");
+  let buffer = Buffer.from(image_b64 as string, "base64");
+
+  const w = req.nextUrl.searchParams.get("w");
+  if (w) {
+    const width = Math.min(parseInt(w, 10), 1200);
+    if (width > 0) {
+      buffer = Buffer.from(await sharp(buffer).resize({ width, withoutEnlargement: true }).toBuffer());
+    }
+  }
+
   return new NextResponse(buffer, {
     headers: {
       "Content-Type": mime_type as string,

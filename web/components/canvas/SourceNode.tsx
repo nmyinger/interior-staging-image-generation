@@ -21,7 +21,7 @@ export const SourceNode = memo(function SourceNode({ id, data }: NodeProps) {
   }, [id, d.filename, deleteElements]);
 
   return (
-    <div className="relative bg-white border-2 border-slate-200 rounded-xl shadow-sm w-44 overflow-hidden group">
+    <div className="relative bg-white border-2 border-stone-200 rounded-xl shadow-sm w-44 overflow-hidden group">
       {d.photoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -31,7 +31,7 @@ export const SourceNode = memo(function SourceNode({ id, data }: NodeProps) {
           className="w-full h-28 object-cover block"
         />
       ) : (
-        <div className="w-full h-28 bg-slate-100" />
+        <div className="w-full h-28 bg-stone-100" />
       )}
       <button
         onClick={handleDelete}
