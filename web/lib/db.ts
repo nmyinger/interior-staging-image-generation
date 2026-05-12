@@ -1,9 +1,13 @@
 import { neon } from "@neondatabase/serverless";
+import { randomUUID } from "crypto";
 
 export const sql = neon(process.env.DATABASE_URL!);
 
+export function genId(): string {
+  return randomUUID().replace(/-/g, "").slice(0, 12);
+}
+
 export async function migrate() {
-  // Users — populated on first Google sign-in
   await sql`
     CREATE TABLE IF NOT EXISTS users (
       id         TEXT PRIMARY KEY,
@@ -14,7 +18,6 @@ export async function migrate() {
     )
   `;
 
-  // Source photos — global (same apartment for everyone)
   await sql`
     CREATE TABLE IF NOT EXISTS photos (
       filename       TEXT PRIMARY KEY,
@@ -26,40 +29,49 @@ export async function migrate() {
     )
   `;
 
-  // Drop old schema if it lacks user_id (dev migration)
-  const genHasUser = await sql`
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'generations' AND column_name = 'user_id'
+  await sql`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id            TEXT PRIMARY KEY,
+      owner_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name          TEXT NOT NULL DEFAULT 'Untitled',
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
   `;
-  if (!genHasUser.length) {
+
+  // One-time migration from legacy generations/edges to generic canvas_nodes/canvas_edges
+  const hasCanvas = await sql`
+    SELECT 1 FROM information_schema.tables
+    WHERE table_name = 'canvas_nodes' AND table_schema = 'public'
+  `;
+
+  if (!hasCanvas.length) {
     await sql`DROP TABLE IF EXISTS edges`;
     await sql`DROP TABLE IF EXISTS generations`;
+
+    await sql`
+      CREATE TABLE canvas_nodes (
+        id         TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        type       TEXT NOT NULL,
+        x          REAL NOT NULL DEFAULT 0,
+        y          REAL NOT NULL DEFAULT 0,
+        data       JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `;
+    await sql`CREATE INDEX canvas_nodes_session     ON canvas_nodes(session_id)`;
+    await sql`CREATE INDEX canvas_nodes_session_type ON canvas_nodes(session_id, type)`;
+
+    await sql`
+      CREATE TABLE canvas_edges (
+        id            TEXT PRIMARY KEY,
+        session_id    TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        source        TEXT NOT NULL,
+        source_handle TEXT NOT NULL DEFAULT 'output',
+        target        TEXT NOT NULL,
+        target_handle TEXT NOT NULL DEFAULT 'input'
+      )
+    `;
+    await sql`CREATE INDEX canvas_edges_session ON canvas_edges(session_id)`;
   }
-
-  // Generations — per user, one row per (user, photo)
-  await sql`
-    CREATE TABLE IF NOT EXISTS generations (
-      user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      filename   TEXT NOT NULL,
-      prompt     TEXT NOT NULL DEFAULT '',
-      output_b64 TEXT,
-      node_x     REAL NOT NULL DEFAULT 320,
-      node_y     REAL NOT NULL DEFAULT 40,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (user_id, filename)
-    )
-  `;
-
-  // Edges — per user, user-drawn reference connections
-  await sql`
-    CREATE TABLE IF NOT EXISTS edges (
-      user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      id            TEXT NOT NULL,
-      source_node   TEXT NOT NULL,
-      source_handle TEXT,
-      target_node   TEXT NOT NULL,
-      target_handle TEXT,
-      PRIMARY KEY (user_id, id)
-    )
-  `;
 }

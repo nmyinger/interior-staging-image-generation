@@ -1,10 +1,11 @@
 "use client";
 
-import { memo, useCallback, useState } from "react";
-import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
-import { Loader2, Sparkles, Download, X } from "lucide-react";
+import { memo, useCallback, useContext, useState } from "react";
+import { Handle, Position, useReactFlow, useStore, type NodeProps } from "@xyflow/react";
+import { Loader2, Sparkles, Download, X, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { SessionContext } from "./SessionContext";
 import type { GenerationNodeData, NodeStatus } from "@/types/nodes";
 
 function StatusDot({ status }: { status: NodeStatus }) {
@@ -21,9 +22,16 @@ const HANDLE_REF_STYLE = { top: "60%" };
 
 export const GenerationNode = memo(function GenerationNode({ id, data }: NodeProps) {
   const d = data as unknown as GenerationNodeData;
-  const { getEdges, getNode, deleteElements, updateNodeData } = useReactFlow();
-  const [prompt, setPrompt] = useState(d.prompt);
-  const [status, setStatus] = useState(d.status);
+  const sessionId = useContext(SessionContext);
+  const { deleteElements, updateNodeData } = useReactFlow();
+
+  // Reactive: re-renders when any edge connecting this node's base handle changes
+  const isBaseConnected = useStore(s =>
+    s.edges.some(e => e.target === id && e.targetHandle === "base")
+  );
+
+  const [prompt, setPrompt] = useState(d.prompt ?? "");
+  const [status, setStatus] = useState<NodeStatus>(d.status ?? "idle");
   const [outputUrl, setOutputUrl] = useState(d.outputImageUrl ?? "");
   const [error, setError] = useState(d.error ?? "");
 
@@ -32,41 +40,38 @@ export const GenerationNode = memo(function GenerationNode({ id, data }: NodePro
   }, [id, deleteElements]);
 
   const generate = useCallback(async () => {
+    if (!isBaseConnected) return;
     setStatus("generating");
     setError("");
-
-    const edges = getEdges();
-    const refEdge = edges.find((e) => e.target === id && e.targetHandle === "ref");
-    let referenceDataUrl: string | undefined;
-    if (refEdge) {
-      const refNode = getNode(refEdge.source);
-      const refData = refNode?.data as unknown as GenerationNodeData | undefined;
-      referenceDataUrl = refData?.outputImageUrl;
-    }
 
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ baseFilename: d.filename, referenceDataUrl, prompt }),
+        body: JSON.stringify({ nodeId: id, sessionId, prompt }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Generation failed");
-      setOutputUrl(json.imageDataUrl);
+
+      const dataUrl: string = json.imageDataUrl;
+      const b64 = dataUrl.replace(/^data:[^;]+;base64,/, "");
+      setOutputUrl(dataUrl);
       setStatus("done");
+      // Merge output into node data so the debounced save persists it
+      updateNodeData(id, { outputB64: b64, outputImageUrl: dataUrl, status: "done", prompt });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
       setStatus("error");
     }
-  }, [id, d.filename, prompt, getEdges, getNode]);
+  }, [id, sessionId, prompt, isBaseConnected, updateNodeData]);
 
   const download = useCallback(() => {
     if (!outputUrl) return;
     const a = document.createElement("a");
     a.href = outputUrl;
-    a.download = `${d.filename.replace(/\.[^.]+$/, "")}_staged.jpg`;
+    a.download = `staged_${id}.jpg`;
     a.click();
-  }, [outputUrl, d.filename]);
+  }, [outputUrl, id]);
 
   const buttonLabel =
     status === "error" ? "Retry"
@@ -115,21 +120,27 @@ export const GenerationNode = memo(function GenerationNode({ id, data }: NodePro
       />
 
       <div className="p-3 space-y-2">
+        {!isBaseConnected && (
+          <div className="flex items-center gap-1.5 text-[10px] text-stone-400 py-0.5">
+            <ImageIcon size={11} />
+            Connect a photo node to generate
+          </div>
+        )}
         <Textarea
           value={prompt}
-          onChange={(e) => {
+          onChange={e => {
             setPrompt(e.target.value);
-            updateNodeData(id, { ...d, prompt: e.target.value });
+            updateNodeData(id, { prompt: e.target.value });
           }}
           placeholder="Describe the staging…"
           className="text-xs resize-none h-20 nodrag"
-          onMouseDown={(e) => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
         />
         <Button
           size="sm"
           className={`w-full text-white ${status === "error" ? "bg-clay-500 hover:bg-clay-600" : "bg-sage-600 hover:bg-sage-700"}`}
           onClick={generate}
-          disabled={status === "generating"}
+          disabled={status === "generating" || !isBaseConnected}
         >
           {status === "generating" ? (
             <><Loader2 size={12} className="mr-1 animate-spin" /> Generating…</>

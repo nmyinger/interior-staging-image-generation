@@ -14,152 +14,27 @@ import {
   type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Loader2, Database, Upload, AlertCircle } from "lucide-react";
+import { Loader2, Upload, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import { SourceNode } from "./SourceNode";
 import { GenerationNode } from "./GenerationNode";
 import { DeletableEdge } from "./DeletableEdge";
 import { MenuBar } from "./MenuBar";
-import type { SourceNodeData, GenerationNodeData } from "@/types/nodes";
+import { SessionContext } from "./SessionContext";
+import type { PhotoNodeData, GenerationNodeData } from "@/types/nodes";
 
 const nodeTypes: NodeTypes = {
-  sourceNode: SourceNode,
-  generationNode: GenerationNode,
+  photo: SourceNode,
+  generation: GenerationNode,
 };
 
 const edgeTypes = { deletable: DeletableEdge };
 
-interface PhotoRow {
-  filename: string;
-  room_type: string;
-  zone: string;
-  default_prompt: string;
-}
-
-interface GenerationRow {
-  filename: string;
-  prompt: string;
-  output_b64: string | null;
-  node_x: number;
-  node_y: number;
-}
-
-interface EdgeRow {
-  id: string;
-  source_node: string;
-  source_handle: string | null;
-  target_node: string;
-  target_handle: string | null;
-}
-
-const COL_X = { source: 60, gen: 320 };
-const miniMapNodeColor = (n: { type?: string }) =>
-  n.type === "sourceNode" ? "#a8a29e" : "#6b8a68";
-const ROW_H = 260;
-
 type SaveState = "idle" | "saving" | "saved" | "error";
 
-function buildNodesAndEdges(
-  photos: PhotoRow[],
-  generations: Record<string, GenerationRow>,
-  dbEdges: EdgeRow[],
-  srcPositions: Record<string, { x: number; y: number }>,
-  hiddenSources: Set<string>
-) {
-  const nodes: Node[] = [];
-  const autoEdges: Edge[] = [];
-  let y = 40;
-
-  const byZone: Record<string, PhotoRow[]> = {};
-  for (const p of photos) {
-    (byZone[p.zone] ??= []).push(p);
-  }
-
-  for (const group of Object.values(byZone)) {
-    for (const photo of group) {
-      const srcId = `src-${photo.filename}`;
-      const genId = `gen-${photo.filename}`;
-
-      if (hiddenSources.has(srcId)) { y += ROW_H; continue; }
-
-      const saved = generations[photo.filename];
-      const genY = saved ? saved.node_y : y;
-      const srcPos = srcPositions[srcId] ?? { x: COL_X.source, y: genY };
-      const thumbUrl = `/api/photos/${encodeURIComponent(photo.filename)}?w=400`;
-
-      const srcData: SourceNodeData = {
-        filename: photo.filename,
-        roomType: photo.room_type,
-        label: photo.filename,
-        photoUrl: thumbUrl,
-      };
-      nodes.push({
-        id: srcId,
-        type: "sourceNode",
-        position: srcPos,
-        data: srcData as unknown as Record<string, unknown>,
-      });
-
-      const outputDataUrl = saved?.output_b64
-        ? `data:image/jpeg;base64,${saved.output_b64}`
-        : undefined;
-
-      const genData: GenerationNodeData = {
-        filename: photo.filename,
-        roomType: photo.room_type,
-        label: photo.filename,
-        sourcePhotoUrl: thumbUrl,
-        prompt: saved?.prompt || photo.default_prompt,
-        status: outputDataUrl ? "done" : "idle",
-        outputImageUrl: outputDataUrl,
-      };
-      nodes.push({
-        id: genId,
-        type: "generationNode",
-        position: { x: saved ? saved.node_x : COL_X.gen, y: genY },
-        data: genData as unknown as Record<string, unknown>,
-      });
-
-      autoEdges.push({
-        id: `auto-${srcId}-${genId}`,
-        source: srcId,
-        sourceHandle: "photo",
-        target: genId,
-        targetHandle: "base",
-        interactionWidth: 20,
-        style: { stroke: "var(--color-stone-300)", strokeWidth: 1.5 },
-      });
-
-      y += ROW_H;
-    }
-    y += 40;
-  }
-
-  const restoredEdges: Edge[] = dbEdges.map((e) => ({
-    id: e.id,
-    source: e.source_node,
-    sourceHandle: e.source_handle ?? undefined,
-    target: e.target_node,
-    targetHandle: e.target_handle ?? undefined,
-    type: "deletable",
-    interactionWidth: 20,
-    style: {
-      stroke: e.target_handle === "ref" ? "var(--color-acacia-400)" : "var(--color-stone-300)",
-      strokeWidth: 1.5,
-      strokeDasharray: e.target_handle === "ref" ? "5 3" : undefined,
-    },
-  }));
-
-  return { nodes, edges: [...autoEdges, ...restoredEdges] };
-}
-
-function loadSrcPositions(): Record<string, { x: number; y: number }> {
-  try { return JSON.parse(localStorage.getItem("canvas-src-positions") ?? "{}"); } catch { return {}; }
-}
-
-function loadHiddenSources(): Set<string> {
-  try { return new Set(JSON.parse(localStorage.getItem("canvas-hidden-sources") ?? "[]")); } catch { return new Set(); }
+function newId(): string {
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 }
 
 function useDebounce<T>(value: T, ms: number) {
@@ -171,13 +46,39 @@ function useDebounce<T>(value: T, ms: number) {
   return debounced;
 }
 
-export function StageCanvas({ userId: _userId }: { userId: string }) {
+const miniMapNodeColor = (n: { type?: string }) =>
+  n.type === "photo" ? "#a8a29e" : "#6b8a68";
+
+function edgeStyle(targetHandle?: string | null) {
+  const isRef = targetHandle === "ref";
+  return {
+    stroke: isRef ? "var(--color-acacia-400)" : "var(--color-stone-300)",
+    strokeWidth: 1.5,
+    strokeDasharray: isRef ? "5 3" : undefined,
+  };
+}
+
+interface DBNode {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  data: Record<string, unknown>;
+}
+
+interface DBEdge {
+  id: string;
+  source: string;
+  source_handle: string;
+  target: string;
+  target_handle: string;
+}
+
+export function StageCanvas({ sessionId }: { sessionId: string }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [seeding, setSeeding] = useState(false);
-  const [noPhotos, setNoPhotos] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [uploading, setUploading] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
@@ -191,35 +92,53 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
     setLoading(true);
     setLoadError(null);
     try {
-      const [photosRes, canvasRes] = await Promise.all([
-        fetch("/api/photos"),
-        fetch("/api/canvas"),
-      ]);
-      if (!photosRes.ok || !canvasRes.ok) throw new Error("Failed to load canvas data");
+      const res = await fetch(`/api/canvas?sessionId=${sessionId}`);
+      if (!res.ok) throw new Error("Failed to load canvas");
+      const { nodes: dbNodes, edges: dbEdges }: { nodes: DBNode[]; edges: DBEdge[] } = await res.json();
 
-      const { photos }: { photos: PhotoRow[] } = await photosRes.json();
-      const { generations: genRows, edges: edgeRows }: { generations: GenerationRow[]; edges: EdgeRow[] } =
-        await canvasRes.json();
+      const rfNodes: Node[] = dbNodes.map(n => {
+        if (n.type === "photo") {
+          const data: PhotoNodeData = {
+            filename: n.data.filename as string,
+            photoUrl: `/api/photos/${encodeURIComponent(n.data.filename as string)}?w=400`,
+          };
+          return { id: n.id, type: "photo", position: { x: n.x, y: n.y }, data: data as unknown as Record<string, unknown> };
+        } else {
+          const outputB64 = n.data.outputB64 as string | undefined;
+          const data: GenerationNodeData = {
+            prompt: (n.data.prompt as string) ?? "",
+            status: n.data.status === "done" ? "done" : "idle",
+            outputB64,
+            outputImageUrl: outputB64 ? `data:image/jpeg;base64,${outputB64}` : undefined,
+          };
+          return { id: n.id, type: "generation", position: { x: n.x, y: n.y }, data: data as unknown as Record<string, unknown> };
+        }
+      });
 
-      if (!photos.length) {
-        setNoPhotos(true);
-        setLoading(false);
-        return;
-      }
+      // Filter out orphan edges whose source or target nodes no longer exist
+      const nodeIds = new Set(rfNodes.map(n => n.id));
+      const rfEdges: Edge[] = dbEdges
+        .filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
+        .map(e => ({
+          id: e.id,
+          source: e.source,
+          sourceHandle: e.source_handle,
+          target: e.target,
+          targetHandle: e.target_handle,
+          type: "deletable",
+          interactionWidth: 20,
+          style: edgeStyle(e.target_handle),
+        }));
 
-      const srcPositions = loadSrcPositions();
-      const hiddenSources = loadHiddenSources();
-      const genMap = Object.fromEntries(genRows.map((g) => [g.filename, g]));
-      const { nodes: n, edges: e } = buildNodesAndEdges(photos, genMap, edgeRows, srcPositions, hiddenSources);
-      setNodes(n);
-      setEdges(e);
-      setLoading(false);
-      setTimeout(() => { saveEnabled.current = true; }, 2000);
+      setNodes(rfNodes);
+      setEdges(rfEdges);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
       setLoading(false);
+      setTimeout(() => { saveEnabled.current = true; }, 1500);
     }
-  }, [setNodes, setEdges]);
+  }, [sessionId, setNodes, setEdges]);
 
   useEffect(() => {
     if (!initialized.current) {
@@ -238,46 +157,54 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
     }
   }, [saveState]);
 
+  // Debounced save: serialize all nodes + edges to DB
   useEffect(() => {
     if (!saveEnabled.current || loading) return;
     setSaveState("saving");
 
-    const srcPos: Record<string, { x: number; y: number }> = {};
-    debouncedNodes.filter((n) => n.type === "sourceNode").forEach((n) => {
-      srcPos[n.id] = { x: n.position.x, y: n.position.y };
+    const dbNodes = debouncedNodes.map(n => {
+      const type = n.type as string;
+      let data: Record<string, unknown>;
+      if (type === "photo") {
+        const d = n.data as unknown as PhotoNodeData;
+        data = { filename: d.filename };
+      } else {
+        const d = n.data as unknown as GenerationNodeData;
+        data = {
+          prompt: d.prompt ?? "",
+          status: d.status === "done" ? "done" : "idle",
+          ...(d.outputB64 ? { outputB64: d.outputB64 } : {}),
+        };
+      }
+      return { id: n.id, type, x: n.position.x, y: n.position.y, data };
     });
-    try { localStorage.setItem("canvas-src-positions", JSON.stringify(srcPos)); } catch {}
 
-    const userEdges = debouncedEdges.filter((e) => !e.id.startsWith("auto-"));
-    const genPositions = debouncedNodes
-      .filter((n) => n.type === "generationNode")
-      .map((n) => {
-        const nd = n.data as unknown as GenerationNodeData;
-        return { filename: nd.filename, x: n.position.x, y: n.position.y, prompt: nd.prompt };
-      });
+    const dbEdges = debouncedEdges.map(e => ({
+      id: e.id,
+      source: e.source,
+      sourceHandle: e.sourceHandle ?? "output",
+      target: e.target,
+      targetHandle: e.targetHandle ?? "input",
+    }));
 
     fetch("/api/canvas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ edges: userEdges, nodePositions: genPositions }),
+      body: JSON.stringify({ sessionId, nodes: dbNodes, edges: dbEdges }),
     })
-      .then((r) => (r.ok ? setSaveState("saved") : setSaveState("error")))
+      .then(r => (r.ok ? setSaveState("saved") : setSaveState("error")))
       .catch(() => setSaveState("error"));
-  }, [debouncedEdges, debouncedNodes, loading]);
+  }, [debouncedEdges, debouncedNodes, loading, sessionId]);
 
   const onConnect = useCallback(
     (connection: Connection) =>
-      setEdges((eds) =>
+      setEdges(eds =>
         addEdge(
           {
             ...connection,
             type: "deletable",
             interactionWidth: 20,
-            style: {
-              stroke: connection.targetHandle === "ref" ? "var(--color-acacia-400)" : "var(--color-stone-300)",
-              strokeWidth: 1.5,
-              strokeDasharray: connection.targetHandle === "ref" ? "5 3" : undefined,
-            },
+            style: edgeStyle(connection.targetHandle),
           },
           eds
         )
@@ -285,85 +212,12 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
     [setEdges]
   );
 
-  const seedPhotos = useCallback(async () => {
-    setSeeding(true);
-    await fetch("/api/setup");
-    setNoPhotos(false);
-    await loadCanvas();
-    setSeeding(false);
-  }, [loadCanvas]);
-
-  const addNodesFromPhoto = useCallback(
-    (photo: PhotoRow, position: { x: number; y: number }) => {
-      const srcId = `src-${photo.filename}`;
-      const genId = `gen-${photo.filename}`;
-
-      try {
-        const hidden: string[] = JSON.parse(localStorage.getItem("canvas-hidden-sources") ?? "[]");
-        const filtered = hidden.filter((id) => id !== srcId);
-        localStorage.setItem("canvas-hidden-sources", JSON.stringify(filtered));
-      } catch {}
-
-      const thumbUrl = `/api/photos/${encodeURIComponent(photo.filename)}?w=400`;
-
-      setNodes((nds) => {
-        if (nds.some((n) => n.id === srcId)) return nds;
-        const srcData: SourceNodeData = {
-          filename: photo.filename,
-          roomType: photo.room_type,
-          label: photo.filename,
-          photoUrl: thumbUrl,
-        };
-        const genData: GenerationNodeData = {
-          filename: photo.filename,
-          roomType: photo.room_type,
-          label: photo.filename,
-          sourcePhotoUrl: thumbUrl,
-          prompt: photo.default_prompt,
-          status: "idle",
-        };
-        return [
-          ...nds,
-          {
-            id: srcId,
-            type: "sourceNode",
-            position,
-            data: srcData as unknown as Record<string, unknown>,
-          },
-          {
-            id: genId,
-            type: "generationNode",
-            position: { x: position.x + 280, y: position.y },
-            data: genData as unknown as Record<string, unknown>,
-          },
-        ];
-      });
-
-      setEdges((eds) => {
-        const autoId = `auto-${srcId}-${genId}`;
-        if (eds.some((e) => e.id === autoId)) return eds;
-        return addEdge(
-          {
-            id: autoId,
-            source: srcId,
-            sourceHandle: "photo",
-            target: genId,
-            targetHandle: "base",
-            interactionWidth: 20,
-            style: { stroke: "var(--color-stone-300)", strokeWidth: 1.5 },
-          },
-          eds
-        );
-      });
-    },
-    [setNodes, setEdges]
-  );
-
-  const uploadAndAddPhoto = useCallback(
+  // Upload a file and add a photo node at the given canvas position
+  const createPhotoNode = useCallback(
     async (file: File, position: { x: number; y: number }) => {
-      await new Promise<void>((resolve, reject) => {
+      return new Promise<void>((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = async (e) => {
+        reader.onload = async e => {
           const dataUrl = e.target?.result as string;
           const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
           if (!match) { reject(new Error("Invalid file")); return; }
@@ -376,14 +230,55 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
             });
             if (!res.ok) throw new Error("Upload failed");
             const { photo } = await res.json();
-            addNodesFromPhoto(photo, position);
+            const data: PhotoNodeData = {
+              filename: photo.filename,
+              photoUrl: `/api/photos/${encodeURIComponent(photo.filename)}?w=400`,
+            };
+            setNodes(nds => [
+              ...nds,
+              { id: newId(), type: "photo", position, data: data as unknown as Record<string, unknown> },
+            ]);
             resolve();
           } catch (err) { reject(err); }
         };
         reader.readAsDataURL(file);
       });
     },
-    [addNodesFromPhoto]
+    [setNodes]
+  );
+
+  // Add an empty generation node at canvas center
+  const handleAddGenerationNode = useCallback(() => {
+    const pos = flowInstance.current?.screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    }) ?? { x: 400, y: 200 };
+    const data: GenerationNodeData = { prompt: "", status: "idle" };
+    setNodes(nds => [
+      ...nds,
+      { id: newId(), type: "generation", position: pos, data: data as unknown as Record<string, unknown> },
+    ]);
+  }, [setNodes]);
+
+  const handleFileInput = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files ?? []).filter(f => f.type.startsWith("image/"));
+      if (!files.length) return;
+      setUploading(true);
+      const center = flowInstance.current?.screenToFlowPosition({
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+      }) ?? { x: 100, y: 100 };
+      try {
+        for (let i = 0; i < files.length; i++) {
+          await createPhotoNode(files[i], { x: center.x + i * 260, y: center.y });
+        }
+      } finally {
+        setUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    },
+    [createPhotoNode]
   );
 
   const onDrop = useCallback(
@@ -391,19 +286,19 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
       event.preventDefault();
       dragCounter.current = 0;
       setIsDraggingFile(false);
-      const files = Array.from(event.dataTransfer.files).filter((f) => f.type.startsWith("image/"));
+      const files = Array.from(event.dataTransfer.files).filter(f => f.type.startsWith("image/"));
       if (!files.length || !flowInstance.current) return;
       setUploading(true);
-      const position = flowInstance.current.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const pos = flowInstance.current.screenToFlowPosition({ x: event.clientX, y: event.clientY });
       try {
         for (let i = 0; i < files.length; i++) {
-          await uploadAndAddPhoto(files[i], { x: position.x + i * 300, y: position.y });
+          await createPhotoNode(files[i], { x: pos.x + i * 260, y: pos.y });
         }
       } finally {
         setUploading(false);
       }
     },
-    [uploadAndAddPhoto]
+    [createPhotoNode]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -415,7 +310,7 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
     event.preventDefault();
     dragCounter.current += 1;
     const hasFiles = Array.from(event.dataTransfer.items).some(
-      (item) => item.kind === "file" && item.type.startsWith("image/")
+      item => item.kind === "file" && item.type.startsWith("image/")
     );
     if (hasFiles) setIsDraggingFile(true);
   }, []);
@@ -427,27 +322,6 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
       setIsDraggingFile(false);
     }
   }, []);
-
-  const handleFileInput = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(event.target.files ?? []).filter((f) => f.type.startsWith("image/"));
-      if (!files.length) return;
-      setUploading(true);
-      const center = flowInstance.current?.screenToFlowPosition({
-        x: window.innerWidth / 2,
-        y: window.innerHeight / 2,
-      }) ?? { x: 400, y: 200 };
-      try {
-        for (let i = 0; i < files.length; i++) {
-          await uploadAndAddPhoto(files[i], { x: center.x + i * 300, y: center.y });
-        }
-      } finally {
-        setUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      }
-    },
-    [uploadAndAddPhoto]
-  );
 
   if (loading) {
     return (
@@ -470,64 +344,51 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
     );
   }
 
-  if (noPhotos) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center gap-4 text-stone-500">
-        <Database size={40} className="text-stone-300" />
-        <p className="text-sm">No photos in database yet.</p>
-        <Button onClick={seedPhotos} disabled={seeding} className="bg-sage-600 hover:bg-sage-700 text-white">
-          {seeding ? <><Loader2 size={14} className="mr-2 animate-spin" />Seeding…</> : "Seed photos from Source Photos/"}
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <div className="w-full h-full relative">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={handleFileInput}
-      />
-      {isDraggingFile && (
-        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-stone-50/80 border-2 border-dashed border-stone-300 rounded-lg m-2">
-          <Upload size={28} className="text-stone-400" />
-        </div>
-      )}
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.15 }}
-        minZoom={0.2}
-        maxZoom={2}
-        deleteKeyCode={["Delete", "Backspace"]}
-        onInit={(instance) => { flowInstance.current = instance; }}
-        onDrop={onDrop}
-        onDragOver={onDragOver}
-        onDragEnter={onDragEnter}
-        onDragLeave={onDragLeave}
-      >
-        <Background gap={20} color="var(--color-stone-200)" />
-        <MiniMap
-          nodeColor={miniMapNodeColor}
-          className="!rounded-lg"
+    <SessionContext.Provider value={sessionId}>
+      <div className="w-full h-full relative">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleFileInput}
         />
-        <MenuBar
-          onUpload={() => fileInputRef.current?.click()}
-          onAddNode={() => fileInputRef.current?.click()}
-          uploading={uploading}
-          saveState={saveState}
-        />
-      </ReactFlow>
-    </div>
+        {isDraggingFile && (
+          <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-stone-50/80 border-2 border-dashed border-stone-300 rounded-lg m-2">
+            <Upload size={28} className="text-stone-400" />
+          </div>
+        )}
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          fitView
+          fitViewOptions={{ padding: 0.15 }}
+          minZoom={0.2}
+          maxZoom={2}
+          deleteKeyCode={["Delete", "Backspace"]}
+          onInit={instance => { flowInstance.current = instance; }}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          onDragEnter={onDragEnter}
+          onDragLeave={onDragLeave}
+        >
+          <Background gap={20} color="var(--color-stone-200)" />
+          <MiniMap nodeColor={miniMapNodeColor} className="!rounded-lg" />
+          <MenuBar
+            onUpload={() => fileInputRef.current?.click()}
+            onAddNode={handleAddGenerationNode}
+            uploading={uploading}
+            saveState={saveState}
+          />
+        </ReactFlow>
+      </div>
+    </SessionContext.Provider>
   );
 }

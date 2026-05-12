@@ -3,22 +3,15 @@
 import { memo, useCallback } from "react";
 import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { X } from "lucide-react";
-import type { SourceNodeData } from "@/types/nodes";
+import type { PhotoNodeData } from "@/types/nodes";
 
 export const SourceNode = memo(function SourceNode({ id, data }: NodeProps) {
-  const d = data as unknown as SourceNodeData;
+  const d = data as unknown as PhotoNodeData;
   const { deleteElements } = useReactFlow();
 
   const handleDelete = useCallback(() => {
-    const genId = `gen-${d.filename}`;
-    deleteElements({ nodes: [{ id }, { id: genId }] });
-    try {
-      const hidden: string[] = JSON.parse(localStorage.getItem("canvas-hidden-sources") ?? "[]");
-      if (!hidden.includes(id)) {
-        localStorage.setItem("canvas-hidden-sources", JSON.stringify([...hidden, id]));
-      }
-    } catch {}
-  }, [id, d.filename, deleteElements]);
+    deleteElements({ nodes: [{ id }] });
+  }, [id, deleteElements]);
 
   return (
     <div className="relative bg-white border-2 border-stone-200 rounded-xl shadow-sm w-44 overflow-hidden group">
@@ -31,7 +24,9 @@ export const SourceNode = memo(function SourceNode({ id, data }: NodeProps) {
           className="w-full h-28 object-cover block"
         />
       ) : (
-        <div className="w-full h-28 bg-stone-100" />
+        <div className="w-full h-28 bg-stone-100 flex items-center justify-center">
+          <span className="text-xs text-stone-400">No image</span>
+        </div>
       )}
       <button
         onClick={handleDelete}

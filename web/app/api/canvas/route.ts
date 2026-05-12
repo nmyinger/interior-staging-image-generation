@@ -8,46 +8,72 @@ function userId(session: any) {
   return (session?.user as { id?: string } | undefined)?.id;
 }
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  const uid = userId(session);
+async function verifySession(sessionId: string, uid: string): Promise<boolean> {
+  const rows = await sql`SELECT 1 FROM sessions WHERE id = ${sessionId} AND owner_user_id = ${uid}`;
+  return rows.length > 0;
+}
+
+export async function GET(req: NextRequest) {
+  const authSession = await getServerSession(authOptions);
+  const uid = userId(authSession);
   if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const [edges, generations] = await Promise.all([
-    sql`SELECT id, source_node, source_handle, target_node, target_handle FROM edges WHERE user_id = ${uid}`,
-    sql`SELECT filename, prompt, output_b64, node_x, node_y FROM generations WHERE user_id = ${uid}`,
+  const sessionId = req.nextUrl.searchParams.get("sessionId");
+  if (!sessionId) return NextResponse.json({ error: "sessionId required" }, { status: 400 });
+
+  if (!(await verifySession(sessionId, uid))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const [nodes, edges] = await Promise.all([
+    sql`SELECT id, type, x, y, data FROM canvas_nodes WHERE session_id = ${sessionId} ORDER BY created_at`,
+    sql`SELECT id, source, source_handle, target, target_handle FROM canvas_edges WHERE session_id = ${sessionId}`,
   ]);
 
-  return NextResponse.json({ edges, generations });
+  return NextResponse.json({ nodes, edges });
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  const uid = userId(session);
+  const authSession = await getServerSession(authOptions);
+  const uid = userId(authSession);
   if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { edges, nodePositions } = await req.json() as {
-    edges: Array<{ id: string; source: string; sourceHandle?: string; target: string; targetHandle?: string }>;
-    nodePositions: Array<{ filename: string; x: number; y: number; prompt?: string }>;
+  const { sessionId, nodes, edges } = await req.json() as {
+    sessionId: string;
+    nodes: Array<{ id: string; type: string; x: number; y: number; data: Record<string, unknown> }>;
+    edges: Array<{ id: string; source: string; sourceHandle: string; target: string; targetHandle: string }>;
   };
 
-  await sql`DELETE FROM edges WHERE user_id = ${uid}`;
-  for (const e of edges) {
+  if (!sessionId) return NextResponse.json({ error: "sessionId required" }, { status: 400 });
+  if (!(await verifySession(sessionId, uid))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Upsert all current nodes
+  for (const n of nodes) {
     await sql`
-      INSERT INTO edges (user_id, id, source_node, source_handle, target_node, target_handle)
-      VALUES (${uid}, ${e.id}, ${e.source}, ${e.sourceHandle ?? null}, ${e.target}, ${e.targetHandle ?? null})
-      ON CONFLICT (user_id, id) DO NOTHING
+      INSERT INTO canvas_nodes (id, session_id, type, x, y, data)
+      VALUES (${n.id}, ${sessionId}, ${n.type}, ${n.x}, ${n.y}, ${JSON.stringify(n.data)})
+      ON CONFLICT (id) DO UPDATE
+        SET x = EXCLUDED.x, y = EXCLUDED.y, data = EXCLUDED.data
     `;
   }
 
-  for (const pos of nodePositions) {
+  // Delete nodes no longer on the canvas
+  if (nodes.length > 0) {
+    const ids = nodes.map(n => n.id);
+    await sql`DELETE FROM canvas_nodes WHERE session_id = ${sessionId} AND id != ALL(${ids})`;
+  } else {
+    await sql`DELETE FROM canvas_nodes WHERE session_id = ${sessionId}`;
+  }
+
+  // Replace all edges
+  await sql`DELETE FROM canvas_edges WHERE session_id = ${sessionId}`;
+  for (const e of edges) {
     await sql`
-      INSERT INTO generations (user_id, filename, node_x, node_y, prompt)
-      VALUES (${uid}, ${pos.filename}, ${pos.x}, ${pos.y}, ${pos.prompt ?? ""})
-      ON CONFLICT (user_id, filename) DO UPDATE
-        SET node_x = EXCLUDED.node_x,
-            node_y = EXCLUDED.node_y,
-            prompt = EXCLUDED.prompt
+      INSERT INTO canvas_edges (id, session_id, source, source_handle, target, target_handle)
+      VALUES (${e.id}, ${sessionId}, ${e.source}, ${e.sourceHandle}, ${e.target}, ${e.targetHandle})
+      ON CONFLICT (id) DO NOTHING
     `;
   }
 
