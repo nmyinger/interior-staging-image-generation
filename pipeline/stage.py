@@ -12,6 +12,7 @@ Bathroom suite stages bathroom before closet so the doorway reference is availab
 All outputs cached per file — re-runs skip existing staged images.
 """
 import io
+import time
 from pathlib import Path
 from PIL import Image
 from google import genai
@@ -104,7 +105,7 @@ def _fmt_spatial(s: dict) -> dict:
 
 
 def _generate(client, contents) -> bytes | None:
-    for attempt in range(2):
+    for attempt in range(3):
         resp = client.models.generate_content(
             model=MODEL_IMAGE,
             contents=contents,
@@ -113,12 +114,16 @@ def _generate(client, contents) -> bytes | None:
         if not resp.candidates:
             if hasattr(resp, 'prompt_feedback'):
                 print(f"    WARNING: no candidates — {resp.prompt_feedback}")
+            if attempt < 2:
+                time.sleep(2)
+                continue
             return None
         for part in resp.candidates[0].content.parts:
             if part.inline_data and part.inline_data.mime_type.startswith("image/"):
                 return part.inline_data.data
-        if attempt == 0:
+        if attempt < 2:
             print(f"    retrying (model returned no image)...")
+            time.sleep(2)
     return None
 
 
