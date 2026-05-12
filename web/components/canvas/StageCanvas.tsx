@@ -254,11 +254,10 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
     const userEdges = debouncedEdges.filter((e) => !e.id.startsWith("auto-"));
     const genPositions = debouncedNodes
       .filter((n) => n.type === "generationNode")
-      .map((n) => ({
-        filename: (n.data as unknown as GenerationNodeData).filename,
-        x: n.position.x,
-        y: n.position.y,
-      }));
+      .map((n) => {
+        const nd = n.data as unknown as GenerationNodeData;
+        return { filename: nd.filename, x: n.position.x, y: n.position.y, prompt: nd.prompt };
+      });
 
     fetch("/api/canvas", {
       method: "POST",

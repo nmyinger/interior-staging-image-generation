@@ -19,7 +19,7 @@ function StatusDot({ status }: { status: NodeStatus }) {
 
 export function GenerationNode({ id, data }: NodeProps) {
   const d = data as unknown as GenerationNodeData;
-  const { getEdges, getNode, deleteElements } = useReactFlow();
+  const { getEdges, getNode, deleteElements, updateNodeData } = useReactFlow();
   const [prompt, setPrompt] = useState(d.prompt);
   const [status, setStatus] = useState(d.status);
   const [outputUrl, setOutputUrl] = useState(d.outputImageUrl ?? "");
@@ -126,7 +126,10 @@ export function GenerationNode({ id, data }: NodeProps) {
       <div className="p-3 space-y-2">
         <Textarea
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={(e) => {
+            setPrompt(e.target.value);
+            updateNodeData(id, { ...d, prompt: e.target.value });
+          }}
           placeholder="Describe what to stage in this photo..."
           className="text-xs resize-none h-24 nodrag"
           onMouseDown={(e) => e.stopPropagation()}

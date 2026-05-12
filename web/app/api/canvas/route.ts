@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
 
   const { edges, nodePositions } = await req.json() as {
     edges: Array<{ id: string; source: string; sourceHandle?: string; target: string; targetHandle?: string }>;
-    nodePositions: Array<{ filename: string; x: number; y: number }>;
+    nodePositions: Array<{ filename: string; x: number; y: number; prompt?: string }>;
   };
 
   await sql`DELETE FROM edges WHERE user_id = ${uid}`;
@@ -42,9 +42,12 @@ export async function POST(req: NextRequest) {
 
   for (const pos of nodePositions) {
     await sql`
-      INSERT INTO generations (user_id, filename, node_x, node_y)
-      VALUES (${uid}, ${pos.filename}, ${pos.x}, ${pos.y})
-      ON CONFLICT (user_id, filename) DO UPDATE SET node_x = EXCLUDED.node_x, node_y = EXCLUDED.node_y
+      INSERT INTO generations (user_id, filename, node_x, node_y, prompt)
+      VALUES (${uid}, ${pos.filename}, ${pos.x}, ${pos.y}, ${pos.prompt ?? ""})
+      ON CONFLICT (user_id, filename) DO UPDATE
+        SET node_x = EXCLUDED.node_x,
+            node_y = EXCLUDED.node_y,
+            prompt = EXCLUDED.prompt
     `;
   }
 
