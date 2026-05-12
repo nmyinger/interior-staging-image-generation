@@ -11,7 +11,8 @@ export default function Home() {
           </div>
           <span className="text-sm font-semibold text-stone-800">Virtual Staging</span>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-xs text-stone-400 hidden sm:block">drag image onto canvas · connect handles · Delete to remove</span>
           <UserMenu />
         </div>
       </header>

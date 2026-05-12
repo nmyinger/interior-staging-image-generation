@@ -7,6 +7,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  Panel,
   useNodesState,
   useEdgesState,
   type Connection,
@@ -15,13 +16,12 @@ import {
   type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Loader2, Database, Upload, AlertCircle } from "lucide-react";
+import { Loader2, Database, Upload, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import { SourceNode } from "./SourceNode";
 import { GenerationNode } from "./GenerationNode";
 import { DeletableEdge } from "./DeletableEdge";
-import { Sidebar, type PhotoItem } from "./Sidebar";
 import type { SourceNodeData, GenerationNodeData } from "@/types/nodes";
 
 const nodeTypes: NodeTypes = {
@@ -175,7 +175,6 @@ function useDebounce<T>(value: T, ms: number) {
 export function StageCanvas({ userId: _userId }: { userId: string }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [photos, setPhotos] = useState<PhotoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
@@ -199,21 +198,20 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
       ]);
       if (!photosRes.ok || !canvasRes.ok) throw new Error("Failed to load canvas data");
 
-      const { photos: photoRows }: { photos: PhotoRow[] } = await photosRes.json();
+      const { photos }: { photos: PhotoRow[] } = await photosRes.json();
       const { generations: genRows, edges: edgeRows }: { generations: GenerationRow[]; edges: EdgeRow[] } =
         await canvasRes.json();
 
-      if (!photoRows.length) {
+      if (!photos.length) {
         setNoPhotos(true);
         setLoading(false);
         return;
       }
 
-      setPhotos(photoRows);
       const srcPositions = loadSrcPositions();
       const hiddenSources = loadHiddenSources();
       const genMap = Object.fromEntries(genRows.map((g) => [g.filename, g]));
-      const { nodes: n, edges: e } = buildNodesAndEdges(photoRows, genMap, edgeRows, srcPositions, hiddenSources);
+      const { nodes: n, edges: e } = buildNodesAndEdges(photos, genMap, edgeRows, srcPositions, hiddenSources);
       setNodes(n);
       setEdges(e);
       setLoading(false);
@@ -362,16 +360,6 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
     [setNodes, setEdges]
   );
 
-  const addPhotoToCenter = useCallback((item: PhotoItem) => {
-    const photo = photos.find((p) => p.filename === item.filename);
-    if (!photo) return;
-    const center = flowInstance.current?.screenToFlowPosition({
-      x: window.innerWidth / 2,
-      y: window.innerHeight / 2,
-    }) ?? { x: 400, y: 200 };
-    addNodesFromPhoto(photo, center);
-  }, [photos, addNodesFromPhoto]);
-
   const uploadAndAddPhoto = useCallback(
     async (file: File, position: { x: number; y: number }) => {
       await new Promise<void>((resolve, reject) => {
@@ -389,7 +377,6 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
             });
             if (!res.ok) throw new Error("Upload failed");
             const { photo } = await res.json();
-            setPhotos((prev) => prev.some((p) => p.filename === photo.filename) ? prev : [...prev, photo]);
             addNodesFromPhoto(photo, position);
             resolve();
           } catch (err) { reject(err); }
@@ -496,15 +483,8 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
     );
   }
 
-  const activeIds = new Set(nodes.filter((n) => n.type === "sourceNode").map((n) => n.id));
-  const photoItems: PhotoItem[] = photos.map((p) => ({
-    filename: p.filename,
-    thumbUrl: `/api/photos/${encodeURIComponent(p.filename)}?w=400`,
-    srcId: `src-${p.filename}`,
-  }));
-
   return (
-    <div className="w-full h-full flex">
+    <div className="w-full h-full relative">
       <input
         ref={fileInputRef}
         type="file"
@@ -513,44 +493,59 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
         className="hidden"
         onChange={handleFileInput}
       />
-      <Sidebar
-        photos={photoItems}
-        activeIds={activeIds}
-        uploading={uploading}
-        saveState={saveState}
-        onUploadClick={() => fileInputRef.current?.click()}
-        onAddPhoto={addPhotoToCenter}
-      />
-      <div className="flex-1 relative">
-        {isDraggingFile && (
-          <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-stone-50/80 border-2 border-dashed border-stone-300 rounded-lg m-2">
-            <Upload size={28} className="text-stone-400" />
+      {isDraggingFile && (
+        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-stone-50/80 border-2 border-dashed border-stone-300 rounded-lg m-2">
+          <Upload size={28} className="text-stone-400" />
+        </div>
+      )}
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        fitView
+        fitViewOptions={{ padding: 0.15 }}
+        minZoom={0.2}
+        maxZoom={2}
+        deleteKeyCode={["Delete", "Backspace"]}
+        onInit={(instance) => { flowInstance.current = instance; }}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        onDragEnter={onDragEnter}
+        onDragLeave={onDragLeave}
+      >
+        <Background gap={20} color="var(--color-stone-200)" />
+        <Controls />
+        <MiniMap
+          nodeColor={miniMapNodeColor}
+          className="!rounded-lg"
+        />
+        <Panel position="top-left">
+          <div className="flex items-center gap-2 px-2.5 py-2 bg-white rounded-lg shadow-sm border border-stone-200">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-sage-600 disabled:opacity-50 transition-colors"
+              title="Add photo"
+            >
+              {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+            </button>
+            {saveState !== "idle" && <span className="w-px h-3.5 bg-stone-200" />}
+            {saveState === "saving" && (
+              <Loader2 size={10} className="animate-spin text-stone-400" />
+            )}
+            {saveState === "saved" && (
+              <Check size={10} className="text-moss-500" />
+            )}
+            {saveState === "error" && (
+              <AlertCircle size={10} className="text-clay-400" />
+            )}
           </div>
-        )}
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          fitView
-          fitViewOptions={{ padding: 0.15 }}
-          minZoom={0.2}
-          maxZoom={2}
-          deleteKeyCode={["Delete", "Backspace"]}
-          onInit={(instance) => { flowInstance.current = instance; }}
-          onDrop={onDrop}
-          onDragOver={onDragOver}
-          onDragEnter={onDragEnter}
-          onDragLeave={onDragLeave}
-        >
-          <Background gap={20} color="var(--color-stone-200)" />
-          <Controls />
-          <MiniMap nodeColor={miniMapNodeColor} className="!rounded-lg" />
-        </ReactFlow>
-      </div>
+        </Panel>
+      </ReactFlow>
     </div>
   );
 }
