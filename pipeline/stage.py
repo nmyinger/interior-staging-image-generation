@@ -52,8 +52,7 @@ Must remain clear:
 CATALOG_PROMPT = """You are virtually staging a real estate photograph.
 
 IMAGE 1 is the EMPTY ROOM TO STAGE. Use its exact camera angle, perspective, and lighting. This is your canvas.
-IMAGE 2 is the SAME ZONE already staged from a different angle. Match the furniture EXACTLY — same silhouette, color, material, and finish. Do NOT copy IMAGE 2's camera angle or perspective.
-IMAGE 3 is a FURNITURE CATALOG — labeled tiles showing each piece for precise silhouette and proportion reference.
+IMAGE 2 is a FURNITURE CATALOG — labeled tiles showing the exact objects to place. Study each tile: silhouette, proportions, color, material. Reproduce each piece faithfully. Ignore the neutral catalog background.
 
 ## Placement for this specific camera angle:
 Camera position: {camera_position}
@@ -70,9 +69,8 @@ Must remain clear:
 {count_manifest}
 
 ## Non-negotiable rules:
-- Use IMAGE 1's camera angle exclusively — do not copy IMAGE 2's perspective
-- Match IMAGE 2's furniture identity: same silhouette, material, color, finish for every piece
-- Reproduce each catalog tile faithfully: same proportions and style
+- Use IMAGE 1's camera angle exclusively — do not copy the catalog's neutral layout
+- Reproduce each catalog piece faithfully: same silhouette, material, and color
 - Preserve all architecture in IMAGE 1: walls, floors, ceiling, windows, curtains, appliances, fixtures
 - Do not change any view through windows or doors
 - Shadows and reflections must match IMAGE 1's natural light
@@ -357,22 +355,16 @@ def stage_zone(
         sp = analysis.get(photo.name, {}).get("spatial", {})
         prompt = CATALOG_PROMPT.format(count_manifest=_fmt_counts(counts), **_fmt_spatial(sp))
 
-        photo_rt = analysis.get(photo.name, {}).get("room_type", "")
-        hero_ref_out = staged_heroes.get(photo_rt) or all_hero_outs[0]
-
         with open(photo, "rb") as f:
             empty_data = f.read()
-        with open(hero_ref_out, "rb") as f:
-            hero_ref_data = f.read()
 
         if catalog_path and catalog_path.exists():
             with open(catalog_path, "rb") as f:
                 cat_data = f.read()
             contents = [
                 prompt,
-                types.Part.from_bytes(data=empty_data, mime_type="image/jpeg"),   # IMAGE 1: canvas
-                types.Part.from_bytes(data=hero_ref_data, mime_type="image/jpeg"), # IMAGE 2: identity reference
-                types.Part.from_bytes(data=cat_data, mime_type="image/jpeg"),       # IMAGE 3: catalog
+                types.Part.from_bytes(data=empty_data, mime_type="image/jpeg"),  # IMAGE 1: canvas
+                types.Part.from_bytes(data=cat_data, mime_type="image/jpeg"),     # IMAGE 2: catalog
             ]
         else:
             contents = [
