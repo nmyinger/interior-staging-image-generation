@@ -94,7 +94,6 @@ function buildNodesAndEdges(
         roomType: photo.room_type,
         label: photo.filename,
         photoUrl: thumbUrl,
-        defaultPrompt: photo.default_prompt,
       };
       nodes.push({
         id: srcId,
@@ -103,37 +102,35 @@ function buildNodesAndEdges(
         data: srcData as unknown as Record<string, unknown>,
       });
 
-      if (saved) {
-        const outputDataUrl = saved.output_b64
-          ? `data:image/jpeg;base64,${saved.output_b64}`
-          : undefined;
+      const outputDataUrl = saved?.output_b64
+        ? `data:image/jpeg;base64,${saved.output_b64}`
+        : undefined;
 
-        const genData: GenerationNodeData = {
-          filename: photo.filename,
-          roomType: photo.room_type,
-          label: photo.filename,
-          sourcePhotoUrl: thumbUrl,
-          prompt: saved.prompt || photo.default_prompt,
-          status: outputDataUrl ? "done" : "idle",
-          outputImageUrl: outputDataUrl,
-        };
-        nodes.push({
-          id: genId,
-          type: "generationNode",
-          position: { x: saved.node_x, y: saved.node_y },
-          data: genData as unknown as Record<string, unknown>,
-        });
+      const genData: GenerationNodeData = {
+        filename: photo.filename,
+        roomType: photo.room_type,
+        label: photo.filename,
+        sourcePhotoUrl: thumbUrl,
+        prompt: saved?.prompt || photo.default_prompt,
+        status: outputDataUrl ? "done" : "idle",
+        outputImageUrl: outputDataUrl,
+      };
+      nodes.push({
+        id: genId,
+        type: "generationNode",
+        position: { x: saved ? saved.node_x : COL_X.gen, y: genY },
+        data: genData as unknown as Record<string, unknown>,
+      });
 
-        autoEdges.push({
-          id: `auto-${srcId}-${genId}`,
-          source: srcId,
-          sourceHandle: "photo",
-          target: genId,
-          targetHandle: "base",
-          interactionWidth: 20,
-          style: { stroke: "var(--color-stone-300)", strokeWidth: 1.5 },
-        });
-      }
+      autoEdges.push({
+        id: `auto-${srcId}-${genId}`,
+        source: srcId,
+        sourceHandle: "photo",
+        target: genId,
+        targetHandle: "base",
+        interactionWidth: 20,
+        style: { stroke: "var(--color-stone-300)", strokeWidth: 1.5 },
+      });
 
       y += ROW_H;
     }
@@ -300,6 +297,7 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
   const addNodesFromPhoto = useCallback(
     (photo: PhotoRow, position: { x: number; y: number }) => {
       const srcId = `src-${photo.filename}`;
+      const genId = `gen-${photo.filename}`;
 
       try {
         const hidden: string[] = JSON.parse(localStorage.getItem("canvas-hidden-sources") ?? "[]");
@@ -307,19 +305,59 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
         localStorage.setItem("canvas-hidden-sources", JSON.stringify(filtered));
       } catch {}
 
+      const thumbUrl = `/api/photos/${encodeURIComponent(photo.filename)}?w=400`;
+
       setNodes((nds) => {
         if (nds.some((n) => n.id === srcId)) return nds;
         const srcData: SourceNodeData = {
           filename: photo.filename,
           roomType: photo.room_type,
           label: photo.filename,
-          photoUrl: `/api/photos/${encodeURIComponent(photo.filename)}?w=400`,
-          defaultPrompt: photo.default_prompt,
+          photoUrl: thumbUrl,
         };
-        return [...nds, { id: srcId, type: "sourceNode", position, data: srcData as unknown as Record<string, unknown> }];
+        const genData: GenerationNodeData = {
+          filename: photo.filename,
+          roomType: photo.room_type,
+          label: photo.filename,
+          sourcePhotoUrl: thumbUrl,
+          prompt: photo.default_prompt,
+          status: "idle",
+        };
+        return [
+          ...nds,
+          {
+            id: srcId,
+            type: "sourceNode",
+            position,
+            data: srcData as unknown as Record<string, unknown>,
+          },
+          {
+            id: genId,
+            type: "generationNode",
+            position: { x: position.x + 280, y: position.y },
+            data: genData as unknown as Record<string, unknown>,
+          },
+        ];
+      });
+
+      setEdges((eds) => {
+        const autoId = `auto-${srcId}-${genId}`;
+        if (eds.some((e) => e.id === autoId)) return eds;
+        return addEdge(
+          {
+            id: autoId,
+            source: srcId,
+            sourceHandle: "photo",
+            target: genId,
+            targetHandle: "base",
+            interactionWidth: 20,
+            style: { stroke: "var(--color-stone-300)", strokeWidth: 1.5 },
+          },
+          eds
+        );
       });
     },
-    [setNodes]
+    [setNodes, setEdges]
   );
 
   const uploadAndAddPhoto = useCallback(

@@ -5,7 +5,6 @@ export interface SourceNodeData {
   roomType: string;
   label: string;
   photoUrl: string;
-  defaultPrompt: string;
 }
 
 export interface GenerationNodeData {
