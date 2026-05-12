@@ -3,7 +3,6 @@
 import { memo, useCallback } from "react";
 import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import type { SourceNodeData } from "@/types/nodes";
 
 export const SourceNode = memo(function SourceNode({ id, data }: NodeProps) {
@@ -22,35 +21,30 @@ export const SourceNode = memo(function SourceNode({ id, data }: NodeProps) {
   }, [id, d.filename, deleteElements]);
 
   return (
-    <div className="bg-white border-2 border-slate-200 rounded-xl shadow-sm w-52 overflow-hidden">
-      <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-slate-700 truncate">{d.filename}</p>
-          <Badge variant="secondary" className="mt-1 text-[10px]">
-            {d.roomType.replace("_", " ")}
-          </Badge>
-        </div>
-        <button
-          onClick={handleDelete}
-          className="ml-2 shrink-0 text-slate-300 hover:text-red-400 transition-colors nodrag"
-          title="Remove from canvas"
-        >
-          <X size={14} />
-        </button>
-      </div>
-      {d.photoUrl && (
+    <div className="relative bg-white border-2 border-slate-200 rounded-xl shadow-sm w-44 overflow-hidden group">
+      {d.photoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={d.photoUrl}
-          alt={d.filename}
-          className="w-full h-32 object-cover"
+          alt=""
+          loading="lazy"
+          className="w-full h-28 object-cover block"
         />
+      ) : (
+        <div className="w-full h-28 bg-slate-100" />
       )}
+      <button
+        onClick={handleDelete}
+        className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center text-stone-400 hover:text-clay-400 hover:bg-white transition-colors opacity-0 group-hover:opacity-100 nodrag"
+        title="Remove from canvas"
+      >
+        <X size={11} />
+      </button>
       <Handle
         type="source"
         position={Position.Right}
         id="photo"
-        className="!w-3 !h-3 !bg-slate-400"
+        className="!w-3 !h-3 !bg-stone-400"
       />
     </div>
   );

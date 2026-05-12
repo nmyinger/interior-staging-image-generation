@@ -4,6 +4,34 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ── Natural earth-tone palette ──────────────────────────────────────────── */
+@theme {
+  /* Sage: muted warm gray-green — primary accent */
+  --color-sage-50:  oklch(0.975 0.015 143);
+  --color-sage-100: oklch(0.940 0.025 143);
+  --color-sage-200: oklch(0.870 0.040 143);
+  --color-sage-300: oklch(0.750 0.060 143);
+  --color-sage-400: oklch(0.620 0.075 143);
+  --color-sage-500: oklch(0.520 0.083 143);
+  --color-sage-600: oklch(0.440 0.080 143);
+  --color-sage-700: oklch(0.360 0.072 143);
+  --color-sage-800: oklch(0.280 0.060 143);
+
+  /* Acacia: warm honey-gold — reference edges, warm highlights */
+  --color-acacia-100: oklch(0.950 0.035 76);
+  --color-acacia-200: oklch(0.890 0.060 76);
+  --color-acacia-400: oklch(0.740 0.110 73);
+  --color-acacia-500: oklch(0.630 0.110 73);
+
+  /* Clay: muted terracotta — destructive actions, errors */
+  --color-clay-400: oklch(0.610 0.100 28);
+  --color-clay-500: oklch(0.520 0.110 28);
+  --color-clay-600: oklch(0.440 0.110 28);
+
+  /* Moss: muted earthy green — success states */
+  --color-moss-500: oklch(0.550 0.085 143);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

@@ -21,12 +21,12 @@ export function LoginGate() {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-6">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-violet-600 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-sage-600 flex items-center justify-center">
             <span className="text-white text-lg font-bold">VS</span>
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-slate-800">Virtual Staging</h1>
-            <p className="text-sm text-slate-400">AI-powered interior staging canvas</p>
+            <h1 className="text-xl font-semibold text-stone-800">Virtual Staging</h1>
+            <p className="text-sm text-stone-400">AI-powered interior staging canvas</p>
           </div>
         </div>
         <Button

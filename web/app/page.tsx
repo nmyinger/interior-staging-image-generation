@@ -3,16 +3,16 @@ import { UserMenu } from "@/components/UserMenu";
 
 export default function Home() {
   return (
-    <main className="flex flex-col h-screen bg-slate-50">
-      <header className="h-12 bg-white border-b border-slate-200 flex items-center px-4 shrink-0">
+    <main className="flex flex-col h-screen bg-stone-50">
+      <header className="h-12 bg-stone-50 border-b border-stone-200 flex items-center px-4 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded bg-violet-600 flex items-center justify-center">
+          <div className="w-5 h-5 rounded bg-sage-600 flex items-center justify-center">
             <span className="text-white text-[10px] font-bold">VS</span>
           </div>
-          <span className="text-sm font-semibold text-slate-800">Virtual Staging</span>
+          <span className="text-sm font-semibold text-stone-800">Virtual Staging</span>
         </div>
         <div className="ml-auto flex items-center gap-3">
-          <span className="text-xs text-slate-400 hidden sm:block">drag image onto canvas · connect handles · Delete to remove</span>
+          <span className="text-xs text-stone-400 hidden sm:block">drag image onto canvas · connect handles · Delete to remove</span>
           <UserMenu />
         </div>
       </header>

@@ -52,15 +52,15 @@ interface EdgeRow {
 }
 
 const ZONE_COLORS: Record<string, string> = {
-  open_plan: "#7c3aed",
-  bedroom: "#0284c7",
-  bathroom_suite: "#0891b2",
-  unknown: "#64748b",
+  open_plan:      "#4a7050", // sage
+  bedroom:        "#4a6b96", // dusty blue
+  bathroom_suite: "#3d7d7d", // soft teal
+  unknown:        "#78716c", // warm stone
 };
 
 const COL_X = { source: 60, gen: 320 };
 const miniMapNodeColor = (n: { type?: string }) =>
-  n.type === "sourceNode" ? "#94a3b8" : "#7c3aed";
+  n.type === "sourceNode" ? "#78716c" : "#4a7050";
 const ROW_H = 260;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -471,9 +471,9 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
   if (loadError) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 text-slate-500">
-        <AlertCircle size={40} className="text-red-300" />
-        <p className="text-sm text-red-500">{loadError}</p>
-        <Button onClick={loadCanvas} className="bg-violet-600 hover:bg-violet-700 text-white">
+        <AlertCircle size={40} className="text-clay-400" />
+        <p className="text-sm text-clay-500">{loadError}</p>
+        <Button onClick={loadCanvas} className="bg-sage-600 hover:bg-sage-700 text-white">
           Retry
         </Button>
       </div>
@@ -485,7 +485,7 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
       <div className="h-full flex flex-col items-center justify-center gap-4 text-slate-500">
         <Database size={40} className="text-slate-300" />
         <p className="text-sm">No photos in database yet.</p>
-        <Button onClick={seedPhotos} disabled={seeding} className="bg-violet-600 hover:bg-violet-700 text-white">
+        <Button onClick={seedPhotos} disabled={seeding} className="bg-sage-600 hover:bg-sage-700 text-white">
           {seeding ? <><Loader2 size={14} className="mr-2 animate-spin" />Seeding…</> : "Seed photos from Source Photos/"}
         </Button>
       </div>
@@ -503,8 +503,8 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
         onChange={handleFileInput}
       />
       {isDraggingFile && (
-        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-violet-50/60 border-2 border-dashed border-violet-400 rounded-lg m-2">
-          <div className="flex flex-col items-center gap-2 text-violet-600">
+        <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center bg-sage-50/60 border-2 border-dashed border-sage-400 rounded-lg m-2">
+          <div className="flex flex-col items-center gap-2 text-sage-600">
             <Upload size={32} />
             <p className="text-sm font-medium">Drop to add photo</p>
           </div>
@@ -539,7 +539,7 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-violet-600 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-medium text-stone-600 hover:text-sage-600 disabled:opacity-50 transition-colors"
             >
               {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
               Add Photo
@@ -551,12 +551,12 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
               </span>
             )}
             {saveState === "saved" && (
-              <span className="flex items-center gap-1 text-xs text-emerald-500">
+              <span className="flex items-center gap-1 text-xs text-moss-500">
                 <Check size={10} /> Saved
               </span>
             )}
             {saveState === "error" && (
-              <span className="flex items-center gap-1 text-xs text-red-400">
+              <span className="flex items-center gap-1 text-xs text-clay-400">
                 <AlertCircle size={10} /> Save failed
               </span>
             )}
