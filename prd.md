@@ -43,36 +43,20 @@ Chosen over `gemini-2.5-flash-image` because:
 
 ---
 
-## Pipeline
+## Pipeline (v4)
 
-### Step 1 — Classify
-`classify.py`: Send all photos to Gemini (text-only, vision). Returns `{filename: room_type}` JSON.
-Rooms: `kitchen`, `living_room`, `bedroom`, `bathroom`, `skip`.
+### Step 1 — Batch Analysis (1 API call, cached)
+`analyze.py`: One Gemini text call with all stageable photos. Returns classify + spatial analysis for every photo simultaneously. Cached to `.cache/analysis.json` — free on re-runs.
 
-### Step 2 — Manifest
-`manifest.py`: For each room group, send all photos of that room in one call. Ask for a detailed Markdown furniture spec. Saved as `outputs/{room}/manifest.md`.
+### Step 2 — Apartment Manifest (1 API call, cached)
+`manifest.py`: One Gemini text call with all photos. Returns a master palette and per-zone furniture identity spec (hex colors, materials, dims, silhouette). Cached to `.cache/manifest.json`.
 
-Manifest format — structured Markdown with dashed lists:
-```
-## Virtual Staging — {Room}
-
-### Preserve exactly:
-- [architectural elements]
-
-### Add this furniture:
-- [item: material, color, dimensions, placement]
-
-### Style:
-- [aesthetic, photography standards]
-```
-
-### Step 3 — Stage
-`stage.py`: Reference-chain generation per room.
-- **Angle 1**: `[manifest_text, empty_room_image]` → staged image
-- **Angle 2+**: `[manifest_text, empty_room_image, staged_angle_1]` → staged image
-  - Passing the first staged image as a visual reference is the key consistency mechanism.
-
-Single-angle rooms (bedroom, bathroom): standard single-image edit call.
+### Step 3 — Stage per Zone
+`stage.py`: Per-zone image generation with output caching.
+- **Hero**: `[manifest + spatial plan + empty room]` → staged; cached per file
+- **Catalog**: Extract per-object tile grid from hero (Gemini vision, cached)
+- **Rest**: `[empty room FIRST, catalog grid SECOND]` + spatial plan + count locks; cached
+- **Bathroom closet**: `[empty closet, staged bathroom]` so doorway accessories match
 
 ---
 
@@ -80,18 +64,33 @@ Single-angle rooms (bedroom, bathroom): standard single-image edit call.
 
 ```
 pipeline/
-├── main.py          # CLI entry: python main.py
-├── classify.py
-├── manifest.py
-├── stage.py
-├── config.py        # paths, skip list, model name
+├── main.py           # CLI: python3 main.py [--force]
+├── analyze.py        # batch classify + spatial (1 call, cached)
+├── manifest.py       # apartment-level manifest (1 call, cached)
+├── stage.py          # zone-aware image generation with caching
+├── config.py         # zones, model names, paths
 └── requirements.txt
+.cache/               # intermediate results (gitignored)
+│   ├── analysis.json
+│   ├── manifest.json
+│   └── catalog_{zone}.json
 outputs/
-└── {room}/
+└── {zone}/           # open_plan, bedroom, bathroom_suite
     ├── manifest.md
+    ├── catalog_grid.jpg
     └── {filename}_staged.jpg
-.env                 # GEMINI_API_KEY
+.env                  # GEMINI_API_KEY (gitignored)
 ```
+
+## Zone Grouping (physical connectivity)
+- `open_plan` — kitchen + living_room (same connected space)
+- `bedroom` — isolated room
+- `bathroom_suite` — bathroom + bathroom_closet (closet overlooks bathroom)
+
+## Cost Per Run
+- Text calls: 2 total (analysis + manifest) ≈ $0.01
+- Image calls: 1 per photo at $0.039 ≈ $0.35 for 9 photos
+- Re-runs: $0 for text steps (cached); $0.039 only for any new/changed images
 
 ---
 

@@ -6,6 +6,9 @@
 # Generated outputs
 outputs/
 
+# Pipeline cache (intermediate API results — regenerate with --force)
+.cache/
+
 # Python
 __pycache__/
 *.py[cod]
