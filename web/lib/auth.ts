@@ -1,6 +1,14 @@
 import GoogleProvider from "next-auth/providers/google";
 import type { NextAuthOptions } from "next-auth";
-import { sql } from "@/lib/db";
+import { sql, migrate } from "@/lib/db";
+
+let migrationDone = false;
+async function ensureMigrated() {
+  if (!migrationDone) {
+    await migrate();
+    migrationDone = true;
+  }
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -11,6 +19,7 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ account, profile }) {
+      await ensureMigrated();
       if (account?.provider === "google" && profile?.sub && profile?.email) {
         await sql`
           INSERT INTO users (id, email, name, image)
