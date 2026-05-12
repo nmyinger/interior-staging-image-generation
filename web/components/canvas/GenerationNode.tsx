@@ -2,25 +2,37 @@
 
 import { useCallback, useState } from "react";
 import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
-import { Loader2, Sparkles, Download } from "lucide-react";
+import { Loader2, Sparkles, Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import type { GenerationNodeData } from "@/types/nodes";
+import type { GenerationNodeData, NodeStatus } from "@/types/nodes";
+
+function StatusDot({ status }: { status: NodeStatus }) {
+  const cls =
+    status === "done" ? "bg-emerald-500"
+    : status === "generating" ? "bg-amber-400 animate-pulse"
+    : status === "error" ? "bg-red-400"
+    : "bg-slate-300";
+  return <div className={`w-2 h-2 rounded-full shrink-0 ${cls}`} />;
+}
 
 export function GenerationNode({ id, data }: NodeProps) {
   const d = data as unknown as GenerationNodeData;
-  const { getEdges, getNode } = useReactFlow();
+  const { getEdges, getNode, deleteElements } = useReactFlow();
   const [prompt, setPrompt] = useState(d.prompt);
   const [status, setStatus] = useState(d.status);
   const [outputUrl, setOutputUrl] = useState(d.outputImageUrl ?? "");
   const [error, setError] = useState(d.error ?? "");
 
+  const handleDelete = useCallback(() => {
+    deleteElements({ nodes: [{ id }] });
+  }, [id, deleteElements]);
+
   const generate = useCallback(async () => {
     setStatus("generating");
     setError("");
 
-    // Find connected reference image (from another generation node's output)
     const edges = getEdges();
     const refEdge = edges.find((e) => e.target === id && e.targetHandle === "ref");
     let referenceDataUrl: string | undefined;
@@ -34,11 +46,7 @@ export function GenerationNode({ id, data }: NodeProps) {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          baseFilename: d.filename,
-          referenceDataUrl,
-          prompt,
-        }),
+        body: JSON.stringify({ baseFilename: d.filename, referenceDataUrl, prompt }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Generation failed");
@@ -58,21 +66,42 @@ export function GenerationNode({ id, data }: NodeProps) {
     a.click();
   }, [outputUrl, d.filename]);
 
+  const buttonLabel =
+    status === "error" ? "Retry"
+    : status === "done" ? "Re-generate"
+    : "Generate";
+
   return (
     <div className="bg-white border-2 border-violet-200 rounded-xl shadow-sm w-72 overflow-hidden">
       {/* Header */}
       <div className="px-3 py-2 bg-violet-50 border-b border-violet-200 flex items-center justify-between">
-        <div>
-          <p className="text-xs font-semibold text-violet-800 truncate">{d.filename}</p>
-          <Badge variant="outline" className="mt-1 text-[10px] border-violet-300 text-violet-600">
-            {d.roomType.replace("_", " ")}
-          </Badge>
+        <div className="min-w-0 flex items-center gap-2">
+          <StatusDot status={status} />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-violet-800 truncate">{d.filename}</p>
+            <Badge variant="outline" className="mt-1 text-[10px] border-violet-300 text-violet-600">
+              {d.roomType.replace("_", " ")}
+            </Badge>
+          </div>
         </div>
-        {status === "done" && (
-          <button onClick={download} className="text-violet-400 hover:text-violet-600 ml-2">
-            <Download size={14} />
+        <div className="flex items-center gap-1 ml-2 shrink-0">
+          {status === "done" && (
+            <button
+              onClick={download}
+              className="text-violet-400 hover:text-violet-600 nodrag"
+              title="Download staged image"
+            >
+              <Download size={14} />
+            </button>
+          )}
+          <button
+            onClick={handleDelete}
+            className="text-slate-300 hover:text-red-400 transition-colors nodrag"
+            title="Delete node"
+          >
+            <X size={14} />
           </button>
-        )}
+        </div>
       </div>
 
       {/* Input handles */}
@@ -104,14 +133,14 @@ export function GenerationNode({ id, data }: NodeProps) {
         />
         <Button
           size="sm"
-          className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+          className={`w-full text-white ${status === "error" ? "bg-red-500 hover:bg-red-600" : "bg-violet-600 hover:bg-violet-700"}`}
           onClick={generate}
           disabled={status === "generating"}
         >
           {status === "generating" ? (
             <><Loader2 size={12} className="mr-1 animate-spin" /> Generating…</>
           ) : (
-            <><Sparkles size={12} className="mr-1" /> Generate</>
+            <><Sparkles size={12} className="mr-1" /> {buttonLabel}</>
           )}
         </Button>
         {status === "error" && (
