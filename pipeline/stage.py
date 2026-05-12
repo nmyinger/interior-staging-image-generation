@@ -1,226 +1,106 @@
 """
-Step 3–5: Stage photos zone by zone.
+Step 3: Stage photos zone by zone, sequentially.
 
-For each zone:
-  Heroes     — one per sub-area (kitchen hero + living room hero for open_plan).
-               Staged with [manifest + spatial plan + empty room].
-               Output cached; skipped if already exists.
-  Catalog    — per-object tile grid extracted from all heroes merged (cached).
-  Rest       — staged with [empty room, sub-area staged hero, catalog grid]:
-               empty room is the canvas; hero is the identity reference;
-               catalog is a labeled supplement.
-               Output cached; skipped if already exists.
-  Bathroom closet: staged with [empty closet, staged bathroom] so doorway
-               accessories match.
+Each photo gets up to 3 inputs:
+  1. Unfurnished photo  — the base; camera angle and architecture must be preserved
+  2. Previous staged photo from this zone  — style/consistency reference (skip for first photo)
+  3. Image-specific manifest  — only the furniture that belongs in this camera frame
+
+Photos are staged in order so each one can reference the previously completed image.
+Bathroom suite stages bathroom before closet so the doorway reference is available.
+
+All outputs cached per file — re-runs skip existing staged images.
 """
-import json
-import math
-import re
-from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont
 import io
+from pathlib import Path
+from PIL import Image
 from google import genai
 from google.genai import types
-from config import GEMINI_API_KEY, MODEL_TEXT, MODEL_IMAGE, OUTPUTS_DIR, CACHE_DIR, ZONES
+from config import GEMINI_API_KEY, MODEL_IMAGE, OUTPUTS_DIR, CACHE_DIR
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
-HERO_PROMPT = """You are virtually staging a real estate photograph.
+STAGE_FIRST_PROMPT = """You are virtually staging a real estate photograph.
 
-## Furniture spec for this zone:
-{manifest}
+## Furniture for this camera frame:
+{image_manifest}
 
-## Placement for this specific camera angle:
+## Camera angle:
 Camera position: {camera_position}
 Primary anchor wall: {anchor_wall}
 Frame composition: {frame_composition}
 
-Furniture placement:
-{furniture_zones}
-
 Must remain clear:
 {clearance_zones}
 
-## Non-negotiable rules:
-- Stage THIS photo from its exact camera angle — do not alter the viewpoint
-- Preserve all architecture: walls, floors, ceiling, windows, curtains, appliances, fixtures, baseboards
+## Rules:
+- Place ONLY the furniture listed above — nothing more, nothing less
+- Preserve all architecture exactly: walls, floors, ceiling, windows, curtains, appliances, fixtures
 - Do not change any view through windows or doors
 - Furniture must sit on the floor, correctly scaled to the room
 - Shadows and reflections must match the existing natural light
-- Output must be photorealistic, indistinguishable from a professional real estate photograph"""
+- Photorealistic, indistinguishable from a professional real estate photograph"""
 
-CATALOG_PROMPT = """You are virtually staging a real estate photograph.
+STAGE_REF_PROMPT = """You are virtually staging a real estate photograph.
 
-IMAGE 1 is the EMPTY ROOM TO STAGE. Use its exact camera angle, perspective, and lighting. This is your canvas.
-IMAGE 2 is a FURNITURE CATALOG — labeled tiles showing the exact objects to place. Study each tile: silhouette, proportions, color, material. Reproduce each piece faithfully. Ignore the neutral catalog background.
+IMAGE 1 is the EMPTY ROOM — your base. Use its exact camera angle and lighting. Preserve all architecture.
+IMAGE 2 is the SAME ZONE already staged from a different angle — use it for furniture style reference only. Match visible pieces in color, material, and finish. Do NOT copy IMAGE 2's camera angle, layout, or perspective.
 
-## Placement for this specific camera angle:
+## Furniture for this camera frame:
+{image_manifest}
+
+## Camera angle:
 Camera position: {camera_position}
 Primary anchor wall: {anchor_wall}
 Frame composition: {frame_composition}
 
-Furniture placement:
-{furniture_zones}
-
 Must remain clear:
 {clearance_zones}
 
-## Accessory counts — use exactly these:
-{count_manifest}
-
-## Non-negotiable rules:
-- Use IMAGE 1's camera angle exclusively — do not copy the catalog's neutral layout
-- Reproduce each catalog piece faithfully: same silhouette, material, and color
-- Preserve all architecture in IMAGE 1: walls, floors, ceiling, windows, curtains, appliances, fixtures
+## Rules:
+- Place ONLY the furniture listed above
+- IMAGE 1 is your canvas — its camera angle and perspective are authoritative
+- Match any overlapping pieces from IMAGE 2 exactly in color, material, and silhouette
+- Preserve all architecture from IMAGE 1: walls, floors, ceiling, windows, fixtures
 - Do not change any view through windows or doors
 - Shadows and reflections must match IMAGE 1's natural light
 - Photorealistic, indistinguishable from a professional real estate photograph"""
 
 CLOSET_PROMPT = """You are virtually staging a real estate photograph.
 
-IMAGE 1 is the EMPTY HALLWAY/CLOSET to stage. Use its exact camera angle and perspective.
-IMAGE 2 is the SAME APARTMENT'S BATHROOM, already staged. The bathroom is partially visible through the doorway in IMAGE 1 — the staged bathroom accessories (towels, bath mat, soap dispenser, plant) must match what is visible through that doorway.
+IMAGE 1 is the EMPTY HALLWAY/CLOSET — your base. Use its exact camera angle and lighting.
+IMAGE 2 is the SAME APARTMENT'S BATHROOM, already staged. It is partially visible through the doorway — match its accessories (towels, bath mat, soap dispenser, plant) exactly.
 
-## Placement for this specific camera angle:
+## Furniture for this camera frame:
+{image_manifest}
+
+## Camera angle:
 Camera position: {camera_position}
 Anchor: {anchor_wall}
 Frame composition: {frame_composition}
-
-Closet staging:
-{furniture_zones}
 
 Must remain clear:
 {clearance_zones}
 
 ## Rules:
-- Stage the closet with the items described in the furniture zones
-- The bathroom accessories visible through the doorway must be consistent with IMAGE 2
+- Stage the closet with the items listed above
+- Bathroom accessories visible through the doorway must match IMAGE 2
 - Preserve all architecture: walls, floors, door frames, closet rod, shelving
 - Photorealistic, professional real estate photograph"""
 
-# ── Catalog grid builder ──────────────────────────────────────────────────────
-
-BBOX_PROMPT = """Identify every distinct furniture or decor piece in this staged room image.
-For each, give a bounding box and a short label (sofa, accent_chair, coffee_table, tv_console, arc_lamp, bar_stool, dining_chair, dining_table, side_table, dresser, bed, nightstand, rug, plant, throw_pillow, bath_mat, towel_set, etc.)
-Exclude walls, floors, ceiling, windows, and fixed architecture.
-
-Output ONLY valid JSON:
-{
-  "pieces": [{"label": "sofa", "x1": 120, "y1": 450, "x2": 880, "y2": 920}],
-  "counts": {"sofa": 1, "accent_chair": 2}
-}
-Coordinates are 0–1000 scale, (0,0) = top-left."""
-
-TILE_SIZE, TILE_PAD, LABEL_H = 300, 12, 32
-GRID_BG, TILE_BG = (245, 245, 242), (255, 255, 255)
-
-
-def _build_catalog(hero_paths: list[Path], zone: str) -> tuple[Path | None, dict]:
-    """Build a merged catalog grid from one or more staged hero images."""
-    cache_path = CACHE_DIR / f"catalog_{zone}.json"
-    catalog_img_path = OUTPUTS_DIR / zone / "catalog_grid.jpg"
-
-    if cache_path.exists() and catalog_img_path.exists():
-        data = json.loads(cache_path.read_text())
-        return catalog_img_path, data.get("counts", {})
-
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    all_pieces = []
-    all_counts: dict = {}
-
-    for hero_path in hero_paths:
-        with open(hero_path, "rb") as f:
-            hero_bytes = f.read()
-
-        resp = client.models.generate_content(
-            model=MODEL_TEXT,
-            contents=[BBOX_PROMPT, types.Part.from_bytes(data=hero_bytes, mime_type="image/jpeg")],
-        )
-        raw = re.sub(r'^```(?:json)?\s*', '', resp.text.strip())
-        raw = re.sub(r'\s*```$', '', raw).strip()
-        parsed = json.loads(raw)
-
-        pieces = parsed.get("pieces", [])
-        counts = parsed.get("counts", {})
-        for p in pieces:
-            p["_hero_path"] = str(hero_path)
-        all_pieces.extend(pieces)
-        for k, v in counts.items():
-            all_counts[k] = all_counts.get(k, 0) + v
-
-    merged = {"pieces": all_pieces, "counts": all_counts}
-    cache_path.write_text(json.dumps(merged, indent=2))
-
-    if not all_pieces:
-        return None, all_counts
-
-    tiles = []
-    for p in all_pieces:
-        hero_img = Image.open(p["_hero_path"])
-        W, H = hero_img.size
-        m = max(20, int((p["x2"] - p["x1"]) / 1000 * W * 0.08))
-        x1 = max(0, int(p["x1"] / 1000 * W) - m)
-        y1 = max(0, int(p["y1"] / 1000 * H) - m)
-        x2 = min(W, int(p["x2"] / 1000 * W) + m)
-        y2 = min(H, int(p["y2"] / 1000 * H) + m)
-        crop = hero_img.crop((x1, y1, x2, y2))
-        if crop.width < 20 or crop.height < 20:
-            continue
-        inner = TILE_SIZE - TILE_PAD * 2
-        crop.thumbnail((inner, inner), Image.LANCZOS)
-        tile = Image.new("RGB", (TILE_SIZE, TILE_SIZE + LABEL_H), TILE_BG)
-        tile.paste(crop, ((TILE_SIZE - crop.width) // 2, TILE_PAD + (inner - crop.height) // 2))
-        draw = ImageDraw.Draw(tile)
-        draw.rectangle([(0, TILE_SIZE), (TILE_SIZE, TILE_SIZE + LABEL_H)], fill=(225, 225, 222))
-        label = p["label"].replace("_", " ").upper()
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 12)
-        except Exception:
-            font = ImageFont.load_default()
-        bb = draw.textbbox((0, 0), label, font=font)
-        tw, th = bb[2] - bb[0], bb[3] - bb[1]
-        draw.text(((TILE_SIZE - tw) // 2, TILE_SIZE + (LABEL_H - th) // 2), label, fill=(60, 60, 60), font=font)
-        tiles.append(tile)
-
-    if not tiles:
-        return None, all_counts
-
-    cols = min(4, len(tiles))
-    rows = math.ceil(len(tiles) / cols)
-    gap = 10
-    gw = cols * (TILE_SIZE + gap) + gap
-    gh = rows * (TILE_SIZE + LABEL_H + gap) + gap
-    grid = Image.new("RGB", (gw, gh), GRID_BG)
-    for i, t in enumerate(tiles):
-        r, c = divmod(i, cols)
-        grid.paste(t, (gap + c * (TILE_SIZE + gap), gap + r * (TILE_SIZE + LABEL_H + gap)))
-
-    (OUTPUTS_DIR / zone).mkdir(parents=True, exist_ok=True)
-    grid.save(catalog_img_path, "JPEG", quality=92)
-    print(f"    Catalog: {len(tiles)} tiles → {catalog_img_path.name}")
-    return catalog_img_path, all_counts
-
-# ── Core staging ──────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _fmt_spatial(s: dict) -> dict:
-    fz = "\n".join(f"- {k}: {v}" for k, v in s.get("furniture_zones", {}).items())
     cz = "\n".join(
-        f"- {z['zone']}: {z.get('clear_distance','clear')} — {z.get('reason','')}"
+        f"- {z['zone']}: {z.get('clear_distance', 'clear')} — {z.get('reason', '')}"
         for z in s.get("clearance_zones", [])
     )
     return {
         "camera_position": s.get("camera_position", "not specified"),
         "anchor_wall": s.get("anchor_wall", "not specified"),
         "frame_composition": s.get("frame_composition", "not specified"),
-        "furniture_zones": fz or "place appropriately",
         "clearance_zones": cz or "none",
     }
-
-
-def _fmt_counts(counts: dict) -> str:
-    if not counts:
-        return "no specific count constraints"
-    return "\n".join(f"- {k.replace('_',' ')}: {v}" for k, v in counts.items())
 
 
 def _generate(client, contents) -> bytes | None:
@@ -250,157 +130,91 @@ def _out_path(photo_path: Path, zone: str) -> Path:
     return OUTPUTS_DIR / zone / f"{photo_path.stem}_staged.jpg"
 
 
-def _select_hero(photos: list[Path], analysis: dict) -> Path:
-    """Pick the photo with the most useful camera angle from a list."""
-    for p in photos:
-        sp = analysis.get(p.name, {}).get("spatial", {})
-        cam = sp.get("camera_position", "").lower()
-        if any(w in cam for w in ["toward", "facing", "northeast", "northwest", "southeast", "southwest"]):
-            return p
-    return photos[0]
-
+# ── Main entry point ──────────────────────────────────────────────────────────
 
 def stage_zone(
     zone: str,
     photo_paths: list[Path],
     manifest: str,
     analysis: dict,
+    photo_manifests: dict,
 ) -> list[Path]:
     client = genai.Client(api_key=GEMINI_API_KEY)
     (OUTPUTS_DIR / zone).mkdir(parents=True, exist_ok=True)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    zone_config = ZONES[zone]
-    room_types = zone_config.get("room_types", [])
-
-    # Group photos by room_type within this zone
-    sub_area_photos: dict[str, list[Path]] = {rt: [] for rt in room_types}
-    for p in photo_paths:
-        rt = analysis.get(p.name, {}).get("room_type", "")
-        if rt in sub_area_photos:
-            sub_area_photos[rt].append(p)
-
-    # Select one hero per sub-area.
-    # For bathroom_suite the bathroom hero must have room_type == "bathroom"
-    # so the closet logic always has a valid staged bathroom reference.
-    heroes: dict[str, Path] = {}
-    for rt, photos in sub_area_photos.items():
-        if not photos:
-            continue
-        if zone == "bathroom_suite" and rt == "bathroom_closet":
-            # Closet is never the hero; it will be staged with bathroom as context
-            continue
-        heroes[rt] = _select_hero(photos, analysis)
+    # For bathroom_suite, ensure bathroom is staged before closet
+    if zone == "bathroom_suite":
+        bathroom_photos = [p for p in photo_paths
+                           if analysis.get(p.name, {}).get("room_type") == "bathroom"]
+        closet_photos = [p for p in photo_paths
+                         if analysis.get(p.name, {}).get("room_type") == "bathroom_closet"]
+        ordered = bathroom_photos + closet_photos
+    else:
+        ordered = photo_paths
 
     staged: list[Path] = []
-    staged_heroes: dict[str, Path] = {}  # room_type → staged hero output path
+    last_staged: Path | None = None  # rolling reference for sequential consistency
+    staged_bathroom: Path | None = None
 
-    # Stage all heroes first
-    for rt, hero in heroes.items():
-        hero_out = _out_path(hero, zone)
-        if not hero_out.exists():
-            print(f"    [hero]  {hero.name}...")
-            sp = analysis.get(hero.name, {}).get("spatial", {})
-            prompt = HERO_PROMPT.format(manifest=manifest, **_fmt_spatial(sp))
-            with open(hero, "rb") as f:
-                img_data = f.read()
-            result = _generate(client, [prompt, types.Part.from_bytes(data=img_data, mime_type="image/jpeg")])
-            if result:
-                _save(result, hero_out)
-                print(f"    [hero]  saved → {hero_out.relative_to(hero_out.parent.parent.parent)}")
-            else:
-                print(f"    WARNING: hero generation failed for {hero.name}")
-                continue
-        else:
-            print(f"    [hero]  {hero.name} (cached)")
-        staged.append(hero_out)
-        staged_heroes[rt] = hero_out
-
-    if not staged_heroes:
-        return staged
-
-    # All non-hero photos
-    hero_set = set(heroes.values())
-    rest = [p for p in photo_paths if p not in hero_set]
-
-    if not rest:
-        return staged
-
-    # Build merged catalog from all staged heroes
-    print(f"    Building catalog from hero...")
-    all_hero_outs = list(staged_heroes.values())
-    catalog_path, counts = _build_catalog(all_hero_outs, zone)
-
-    # Separate closet photos (bathroom_suite only)
-    closet_photos = []
-    regular_rest = []
-    if zone == "bathroom_suite":
-        for p in rest:
-            rt = analysis.get(p.name, {}).get("room_type", "")
-            if rt == "bathroom_closet":
-                closet_photos.append(p)
-            else:
-                regular_rest.append(p)
-    else:
-        regular_rest = rest
-
-    # Stage regular photos with [empty_room, sub-area staged hero, catalog]
-    for photo in regular_rest:
+    for photo in ordered:
         out = _out_path(photo, zone)
-        if out.exists():
-            print(f"    [ref]   {photo.name} (cached)")
-            staged.append(out)
-            continue
-        print(f"    [ref]   {photo.name}...")
+        room_type = analysis.get(photo.name, {}).get("room_type", "")
         sp = analysis.get(photo.name, {}).get("spatial", {})
-        prompt = CATALOG_PROMPT.format(count_manifest=_fmt_counts(counts), **_fmt_spatial(sp))
+        img_manifest = photo_manifests.get(photo.name, manifest)
+
+        if out.exists():
+            label = "[closet]" if room_type == "bathroom_closet" else "[photo] "
+            print(f"    {label} {photo.name} (cached)")
+            staged.append(out)
+            last_staged = out
+            if room_type == "bathroom":
+                staged_bathroom = out
+            continue
 
         with open(photo, "rb") as f:
-            empty_data = f.read()
+            photo_data = f.read()
 
-        if catalog_path and catalog_path.exists():
-            with open(catalog_path, "rb") as f:
-                cat_data = f.read()
+        if room_type == "bathroom_closet" and staged_bathroom:
+            # Closet: base is empty closet, reference is staged bathroom
+            print(f"    [closet] {photo.name}...")
+            prompt = CLOSET_PROMPT.format(image_manifest=img_manifest, **_fmt_spatial(sp))
+            with open(staged_bathroom, "rb") as f:
+                bathroom_data = f.read()
             contents = [
                 prompt,
-                types.Part.from_bytes(data=empty_data, mime_type="image/jpeg"),  # IMAGE 1: canvas
-                types.Part.from_bytes(data=cat_data, mime_type="image/jpeg"),     # IMAGE 2: catalog
+                types.Part.from_bytes(data=photo_data, mime_type="image/jpeg"),
+                types.Part.from_bytes(data=bathroom_data, mime_type="image/jpeg"),
+            ]
+        elif last_staged and last_staged.exists():
+            # Subsequent photos: base + previous staged as style reference
+            print(f"    [photo]  {photo.name}...")
+            prompt = STAGE_REF_PROMPT.format(image_manifest=img_manifest, **_fmt_spatial(sp))
+            with open(last_staged, "rb") as f:
+                ref_data = f.read()
+            contents = [
+                prompt,
+                types.Part.from_bytes(data=photo_data, mime_type="image/jpeg"),
+                types.Part.from_bytes(data=ref_data, mime_type="image/jpeg"),
             ]
         else:
+            # First photo: base only
+            print(f"    [photo]  {photo.name}...")
+            prompt = STAGE_FIRST_PROMPT.format(image_manifest=img_manifest, **_fmt_spatial(sp))
             contents = [
-                HERO_PROMPT.format(manifest=manifest, **_fmt_spatial(sp)),
-                types.Part.from_bytes(data=empty_data, mime_type="image/jpeg"),
+                prompt,
+                types.Part.from_bytes(data=photo_data, mime_type="image/jpeg"),
             ]
 
         result = _generate(client, contents)
         if result:
             _save(result, out)
-            print(f"    [ref]   saved → {out.relative_to(out.parent.parent.parent)}")
+            print(f"    saved → {out.relative_to(out.parent.parent.parent)}")
             staged.append(out)
-
-    # Closet photos with staged bathroom context
-    bathroom_out = staged_heroes.get("bathroom") or all_hero_outs[0]
-    for photo in closet_photos:
-        out = _out_path(photo, zone)
-        if out.exists():
-            print(f"    [closet] {photo.name} (cached)")
-            staged.append(out)
-            continue
-        print(f"    [closet] {photo.name}...")
-        sp = analysis.get(photo.name, {}).get("spatial", {})
-        prompt = CLOSET_PROMPT.format(**_fmt_spatial(sp))
-        with open(photo, "rb") as f:
-            empty_data = f.read()
-        with open(bathroom_out, "rb") as f:
-            bathroom_data = f.read()
-        result = _generate(client, [
-            prompt,
-            types.Part.from_bytes(data=empty_data, mime_type="image/jpeg"),
-            types.Part.from_bytes(data=bathroom_data, mime_type="image/jpeg"),
-        ])
-        if result:
-            _save(result, out)
-            print(f"    [closet] saved → {out.relative_to(out.parent.parent.parent)}")
-            staged.append(out)
+            last_staged = out
+            if room_type == "bathroom":
+                staged_bathroom = out
+        else:
+            print(f"    WARNING: generation failed for {photo.name}")
 
     return staged
