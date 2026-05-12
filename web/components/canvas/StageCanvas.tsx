@@ -5,9 +5,7 @@ import {
   ReactFlow,
   addEdge,
   Background,
-  Controls,
   MiniMap,
-  Panel,
   useNodesState,
   useEdgesState,
   type Connection,
@@ -16,12 +14,13 @@ import {
   type Edge,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Loader2, Database, Upload, Check, AlertCircle } from "lucide-react";
+import { Loader2, Database, Upload, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import { SourceNode } from "./SourceNode";
 import { GenerationNode } from "./GenerationNode";
 import { DeletableEdge } from "./DeletableEdge";
+import { MenuBar } from "./MenuBar";
 import type { SourceNodeData, GenerationNodeData } from "@/types/nodes";
 
 const nodeTypes: NodeTypes = {
@@ -518,33 +517,16 @@ export function StageCanvas({ userId: _userId }: { userId: string }) {
         onDragLeave={onDragLeave}
       >
         <Background gap={20} color="var(--color-stone-200)" />
-        <Controls />
         <MiniMap
           nodeColor={miniMapNodeColor}
           className="!rounded-lg"
         />
-        <Panel position="top-left">
-          <div className="flex items-center gap-2 px-2.5 py-2 bg-white rounded-lg shadow-sm border border-stone-200">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="flex items-center gap-1.5 text-xs font-medium text-stone-500 hover:text-sage-600 disabled:opacity-50 transition-colors"
-              title="Add photo"
-            >
-              {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-            </button>
-            {saveState !== "idle" && <span className="w-px h-3.5 bg-stone-200" />}
-            {saveState === "saving" && (
-              <Loader2 size={10} className="animate-spin text-stone-400" />
-            )}
-            {saveState === "saved" && (
-              <Check size={10} className="text-moss-500" />
-            )}
-            {saveState === "error" && (
-              <AlertCircle size={10} className="text-clay-400" />
-            )}
-          </div>
-        </Panel>
+        <MenuBar
+          onUpload={() => fileInputRef.current?.click()}
+          onAddNode={() => fileInputRef.current?.click()}
+          uploading={uploading}
+          saveState={saveState}
+        />
       </ReactFlow>
     </div>
   );
