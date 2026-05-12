@@ -1,39 +1,43 @@
 """
-Step 2: Generate a consistent furniture manifest (Markdown) for each room.
-Sends all angles of a room together so Gemini can reason about the full space.
+Step 3: Generate a furniture identity manifest per room.
+
+Focuses ONLY on what furniture looks like — type, color (with hex), material,
+dimensions, style. Placement is intentionally excluded; that comes from the
+per-photo spatial analysis.
 """
 from pathlib import Path
 from google import genai
 from google.genai import types
 from config import GEMINI_API_KEY, SOURCE_DIR, OUTPUTS_DIR, ROOM_DISPLAY
 
-MANIFEST_PROMPT = """You are a professional interior designer creating a virtual staging brief for a real estate photographer.
+MANIFEST_PROMPT = """You are a professional interior designer writing a virtual staging furniture spec.
 
-I'm showing you {n} photos of the same empty {room}. Study the room carefully:
-- Note the floor type, wall color, ceiling height, windows, natural light direction
-- Note the architectural constraints (columns, alcoves, doors, outlets)
-- Note the approximate dimensions and proportions
+I'm showing you {n} photo(s) of the same empty {room}. Study the room's finishes, color palette, and proportions.
 
-Then write a precise virtual staging manifest in this exact Markdown format:
+Write a furniture identity specification — a precise description of each piece that will be staged. Focus ONLY on what the furniture looks like. Do NOT include placement or positioning (that is handled separately per photo).
 
-## Virtual Staging — {room}
-
-### Preserve exactly:
-- (list every architectural element that must not be altered: walls, floors, ceiling, windows, curtains, light fixtures, appliances, view outside windows, etc.)
-
-### Add this furniture:
-- (list each furniture piece with: type, exact color description, material, approximate size, and placement direction relative to room features)
-- (be specific enough that the same furniture would be recognizable from any camera angle)
-
-### Style:
-- (2–4 bullet points: design aesthetic, photography quality, lighting approach)
+For each piece, specify:
+- Type (e.g. "3-seat sofa", "arc floor lamp")
+- Color: specific hex code + plain description (e.g. "#B0A090 — warm greige linen")
+- Material (e.g. "solid walnut", "brushed brass", "wool blend")
+- Approximate dimensions
+- Key style details that make it identifiable across views
 
 Rules:
-- Furniture must be appropriate for the room size visible in the photos
-- Choose a cohesive modern style that appeals to young urban renters
-- No more than 6–8 furniture pieces total — keep it clean
-- Do not mention brands or specific product names
-- Output ONLY the Markdown manifest, no preamble or explanation"""
+- Choose furniture that complements the room's existing finishes (note the floor color, wall color, cabinet colors if present)
+- Modern style suited for young urban renters
+- 5–8 pieces maximum — keep it clean and uncluttered
+- No brand names
+- Output ONLY the Markdown spec below, no preamble
+
+## Furniture Identity — {room}
+
+### Pieces:
+- **[piece name]**: [color hex + description], [material], [dimensions], [style notes]
+(repeat for each piece)
+
+### Style:
+- [2–3 bullet points on the overall aesthetic and photography standard]"""
 
 
 def generate_manifest(room: str, photo_paths: list[Path]) -> str:
@@ -49,7 +53,7 @@ def generate_manifest(room: str, photo_paths: list[Path]) -> str:
         parts.append(types.Part.from_bytes(data=data, mime_type="image/jpeg"))
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash-lite",
+        model="gemini-2.5-flash",
         contents=parts,
     )
 
@@ -68,20 +72,3 @@ def generate_all_manifests(groups: dict[str, list[Path]]) -> dict[str, str]:
         print(f"  Generating manifest for {room} ({len(paths)} photo(s))...")
         manifests[room] = generate_manifest(room, paths)
     return manifests
-
-
-if __name__ == "__main__":
-    from classify import classify_photos
-    from collections import defaultdict
-
-    classification = classify_photos()
-    groups: dict[str, list[Path]] = defaultdict(list)
-    for filename, room in classification.items():
-        if room != "skip":
-            groups[room].append(SOURCE_DIR / filename)
-
-    manifests = generate_all_manifests(dict(groups))
-    for room, text in manifests.items():
-        print(f"\n{'='*60}")
-        print(f"MANIFEST: {room}")
-        print(text)
