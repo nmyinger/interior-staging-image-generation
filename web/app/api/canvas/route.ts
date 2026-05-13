@@ -55,7 +55,8 @@ export async function POST(req: NextRequest) {
       INSERT INTO canvas_nodes (id, session_id, type, x, y, data)
       VALUES (${n.id}, ${sessionId}, ${n.type}, ${n.x}, ${n.y}, ${JSON.stringify(n.data)})
       ON CONFLICT (id) DO UPDATE
-        SET x = EXCLUDED.x, y = EXCLUDED.y, data = EXCLUDED.data
+        SET x = EXCLUDED.x, y = EXCLUDED.y,
+            data = canvas_nodes.data || EXCLUDED.data
     `;
   }
 

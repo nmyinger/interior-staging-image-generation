@@ -204,11 +204,12 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
         data = { filename: d.filename };
       } else {
         const d = n.data as unknown as GenerationNodeData;
+        // outputB64 is intentionally excluded — it's persisted by /api/generate directly
+        // and preserved server-side via JSONB merge. Omitting it keeps payloads small.
         data = {
           prompt: d.prompt ?? "",
           status: d.status === "done" ? "done" : "idle",
           ...(d.model ? { model: d.model } : {}),
-          ...(d.outputB64 ? { outputB64: d.outputB64 } : {}),
         };
       }
       return { id: n.id, type, x: n.position.x, y: n.position.y, data };
