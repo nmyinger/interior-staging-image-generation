@@ -107,7 +107,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data }: NodePro
         position={Position.Left}
         id="base"
         style={HANDLE_BASE_STYLE}
-        className="!w-3 !h-3 !bg-stone-400"
+        className="!w-4 !h-4 !bg-stone-400 !border-2 !border-white"
         title="Base photo"
       />
       <Handle
@@ -115,7 +115,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data }: NodePro
         position={Position.Left}
         id="ref"
         style={HANDLE_REF_STYLE}
-        className="!w-3 !h-3 !bg-acacia-400"
+        className="!w-4 !h-4 !bg-acacia-400 !border-2 !border-white"
         title="Reference (style)"
       />
 
@@ -164,7 +164,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data }: NodePro
         type="source"
         position={Position.Right}
         id="output"
-        className="!w-3 !h-3 !bg-sage-500"
+        className="!w-4 !h-4 !bg-sage-500 !border-2 !border-white"
         title="Staged output"
       />
     </div>

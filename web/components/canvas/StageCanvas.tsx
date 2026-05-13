@@ -54,9 +54,9 @@ const miniMapNodeColor = (n: { type?: string }) =>
 function edgeStyle(targetHandle?: string | null) {
   const isRef = targetHandle === "ref";
   return {
-    stroke: isRef ? "var(--color-acacia-400)" : "var(--color-stone-300)",
-    strokeWidth: 1.5,
-    strokeDasharray: isRef ? "5 3" : undefined,
+    stroke: isRef ? "var(--color-acacia-400)" : "var(--color-stone-400)",
+    strokeWidth: 2,
+    strokeDasharray: isRef ? "6 3" : undefined,
   };
 }
 
