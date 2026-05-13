@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SessionContext } from "./SessionContext";
 import type { GenerationNodeData, NodeStatus } from "@/types/nodes";
+import { DEFAULT_MODEL_ID } from "@/types/nodes";
 
 function StatusDot({ status }: { status: NodeStatus }) {
   const cls =
@@ -45,10 +46,11 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
     setError("");
 
     try {
+      const model = (data as unknown as GenerationNodeData).model ?? DEFAULT_MODEL_ID;
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nodeId: id, sessionId, prompt }),
+        body: JSON.stringify({ nodeId: id, sessionId, prompt, model }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Generation failed");
@@ -63,7 +65,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
       setError(err instanceof Error ? err.message : "Unknown error");
       setStatus("error");
     }
-  }, [id, sessionId, prompt, isBaseConnected, updateNodeData]);
+  }, [id, sessionId, prompt, isBaseConnected, updateNodeData, data]);
 
   const download = useCallback(() => {
     if (!outputUrl) return;
@@ -79,7 +81,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
     : "Generate";
 
   return (
-    <div className={`bg-white border-2 ${selected ? "border-sage-500 ring-2 ring-sage-200" : "border-sage-200"} rounded-xl shadow-sm w-64 overflow-hidden transition-[border-color,box-shadow]`}>
+    <div className={`bg-white border-2 ${selected ? "border-sage-500 ring-2 ring-sage-200" : "border-sage-200"} rounded-[var(--radius-node)] shadow-sm w-64 overflow-hidden transition-[border-color,box-shadow]`}>
       <div className="px-3 py-2 bg-sage-50 border-b border-sage-200 flex items-center justify-between">
         <StatusDot status={status} />
         <div className="flex items-center gap-1.5">

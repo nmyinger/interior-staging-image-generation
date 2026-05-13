@@ -77,6 +77,7 @@
 }
 
 :root {
+  --radius-node: 10px; /* Apple-style node card corner radius — change here to update all nodes */
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
