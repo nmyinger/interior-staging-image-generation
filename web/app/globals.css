@@ -156,3 +156,10 @@
     @apply font-sans;
   }
 }
+
+/* Suppress ReactFlow's built-in selection outline — nodes handle it themselves */
+.react-flow__node.selected,
+.react-flow__node:focus,
+.react-flow__node:focus-visible {
+  outline: none;
+}

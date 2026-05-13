@@ -20,7 +20,7 @@ function StatusDot({ status }: { status: NodeStatus }) {
 const HANDLE_BASE_STYLE = { top: "30%" };
 const HANDLE_REF_STYLE = { top: "60%" };
 
-export const GenerationNode = memo(function GenerationNode({ id, data }: NodeProps) {
+export const GenerationNode = memo(function GenerationNode({ id, data, selected }: NodeProps) {
   const d = data as unknown as GenerationNodeData;
   const sessionId = useContext(SessionContext);
   const { deleteElements, updateNodeData } = useReactFlow();
@@ -79,7 +79,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data }: NodePro
     : "Generate";
 
   return (
-    <div className="bg-white border-2 border-sage-200 rounded-xl shadow-sm w-64 overflow-hidden">
+    <div className={`bg-white border-2 ${selected ? "border-sage-500 ring-2 ring-sage-200" : "border-sage-200"} rounded-xl shadow-sm w-64 overflow-hidden transition-[border-color,box-shadow]`}>
       <div className="px-3 py-2 bg-sage-50 border-b border-sage-200 flex items-center justify-between">
         <StatusDot status={status} />
         <div className="flex items-center gap-1.5">

@@ -5,7 +5,7 @@ import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
 import { X } from "lucide-react";
 import type { PhotoNodeData } from "@/types/nodes";
 
-export const SourceNode = memo(function SourceNode({ id, data }: NodeProps) {
+export const SourceNode = memo(function SourceNode({ id, data, selected }: NodeProps) {
   const d = data as unknown as PhotoNodeData;
   const { deleteElements } = useReactFlow();
 
@@ -14,7 +14,7 @@ export const SourceNode = memo(function SourceNode({ id, data }: NodeProps) {
   }, [id, deleteElements]);
 
   return (
-    <div className="relative bg-white border-2 border-stone-200 rounded-xl shadow-sm w-44 group">
+    <div className={`relative bg-white border-2 ${selected ? "border-sage-400 ring-2 ring-sage-200" : "border-stone-200"} rounded-xl shadow-sm w-44 group transition-[border-color,box-shadow]`}>
       <div className="overflow-hidden rounded-xl">
         {d.photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element

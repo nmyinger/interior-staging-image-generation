@@ -84,6 +84,8 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [uploading, setUploading] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
+  // Selected node ID — wired up for future node settings panel
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const initialized = useRef(false);
   const saveEnabled = useRef(false);
   const dragCounter = useRef(0);
@@ -413,6 +415,7 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
           onEdgesChange={handleEdgesChange}
           onConnect={onConnect}
           onNodeDragStart={snapshot}
+          onSelectionChange={({ nodes: sel }) => setSelectedNodeId(sel[0]?.id ?? null)}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView
