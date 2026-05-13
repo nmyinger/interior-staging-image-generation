@@ -4,7 +4,12 @@ import { authOptions } from "@/lib/auth";
 import { GoogleGenAI } from "@google/genai";
 import { sql } from "@/lib/db";
 
-const MODEL_IMAGE = "gemini-3.1-flash-image-preview";
+// Keep in sync with GENERATION_MODELS in components/canvas/NodeSettingsPanel.tsx
+const ALLOWED_MODEL_IDS = [
+  "gemini-2.0-flash-preview-image-generation",
+] as const;
+
+const DEFAULT_MODEL = ALLOWED_MODEL_IDS[0];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function userId(session: any) {
@@ -16,7 +21,10 @@ export async function POST(req: NextRequest) {
   const uid = userId(session);
   if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { nodeId, prompt } = await req.json() as { nodeId: string; prompt: string };
+  const { nodeId, prompt, model: requestedModel } = await req.json() as { nodeId: string; prompt: string; model?: string };
+  const model = ALLOWED_MODEL_IDS.includes(requestedModel as typeof ALLOWED_MODEL_IDS[number])
+    ? (requestedModel as string)
+    : DEFAULT_MODEL;
 
   if (!nodeId || !prompt) {
     return NextResponse.json({ error: "nodeId and prompt are required" }, { status: 400 });
@@ -97,34 +105,39 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await ai.models.generateContent({
-      model: MODEL_IMAGE,
-      contents: [{ role: "user", parts }],
-      config: { responseModalities: ["IMAGE"] },
-    });
+  try {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const response = await ai.models.generateContent({
+        model,
+        contents: [{ role: "user", parts }],
+        config: { responseModalities: ["IMAGE"] },
+      });
 
-    const candidates = response.candidates ?? [];
-    if (!candidates.length) {
-      if (attempt === 0) continue;
-      return NextResponse.json({ error: "No candidates returned" }, { status: 500 });
-    }
+      const candidates = response.candidates ?? [];
+      if (!candidates.length) {
+        if (attempt === 0) continue;
+        return NextResponse.json({ error: "No candidates returned" }, { status: 500 });
+      }
 
-    for (const part of candidates[0].content?.parts ?? []) {
-      if (part.inlineData?.data) {
-        const outputB64 = part.inlineData.data;
-        const outputMime = part.inlineData.mimeType ?? "image/jpeg";
+      for (const part of candidates[0].content?.parts ?? []) {
+        if (part.inlineData?.data) {
+          const outputB64 = part.inlineData.data;
+          const outputMime = part.inlineData.mimeType ?? "image/jpeg";
 
-        // Persist output directly into the generation node's data
-        await sql`
-          UPDATE canvas_nodes
-          SET data = data || jsonb_build_object('outputB64', ${outputB64}, 'status', 'done', 'prompt', ${prompt})
-          WHERE id = ${nodeId} AND session_id = ${sessionId}
-        `;
+          await sql`
+            UPDATE canvas_nodes
+            SET data = data || jsonb_build_object('outputB64', ${outputB64}, 'status', 'done', 'prompt', ${prompt})
+            WHERE id = ${nodeId} AND session_id = ${sessionId}
+          `;
 
-        return NextResponse.json({ imageDataUrl: `data:${outputMime};base64,${outputB64}` });
+          return NextResponse.json({ imageDataUrl: `data:${outputMime};base64,${outputB64}` });
+        }
       }
     }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[generate] Gemini API error:", message);
+    return NextResponse.json({ error: `Gemini API error: ${message}` }, { status: 500 });
   }
 
   return NextResponse.json({ error: "Model returned no image" }, { status: 500 });

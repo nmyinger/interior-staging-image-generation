@@ -23,6 +23,7 @@ import { SourceNode } from "./SourceNode";
 import { GenerationNode } from "./GenerationNode";
 import { DeletableEdge } from "./DeletableEdge";
 import { MenuBar } from "./MenuBar";
+import { NodeSettingsPanel } from "./NodeSettingsPanel";
 import { SessionContext } from "./SessionContext";
 import type { PhotoNodeData, GenerationNodeData } from "@/types/nodes";
 
@@ -84,7 +85,6 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [uploading, setUploading] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
-  // Selected node ID — wired up for future node settings panel
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const initialized = useRef(false);
   const saveEnabled = useRef(false);
@@ -142,6 +142,7 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
           const data: GenerationNodeData = {
             prompt: (n.data.prompt as string) ?? "",
             status: n.data.status === "done" ? "done" : "idle",
+            model: n.data.model as string | undefined,
             outputB64,
             outputImageUrl: outputB64 ? `data:image/jpeg;base64,${outputB64}` : undefined,
           };
@@ -207,6 +208,7 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
         data = {
           prompt: d.prompt ?? "",
           status: d.status === "done" ? "done" : "idle",
+          ...(d.model ? { model: d.model } : {}),
           ...(d.outputB64 ? { outputB64: d.outputB64 } : {}),
         };
       }
@@ -437,6 +439,9 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
             uploading={uploading}
             saveState={saveState}
           />
+          {selectedNodeId && nodes.find(n => n.id === selectedNodeId)?.type === "generation" && (
+            <NodeSettingsPanel selectedNodeId={selectedNodeId} />
+          )}
         </ReactFlow>
       </div>
     </SessionContext.Provider>
