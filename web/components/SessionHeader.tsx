@@ -81,7 +81,6 @@ export function SessionHeader({ sessionId, initialName, ownerUserId }: SessionHe
       )}
 
       <div className="ml-auto flex items-center gap-3">
-        <span className="text-xs text-stone-400 hidden sm:block">drag image onto canvas · connect handles · Delete to remove</span>
         <UserMenu />
       </div>
     </header>

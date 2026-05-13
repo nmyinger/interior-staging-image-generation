@@ -35,7 +35,6 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
   const [status, setStatus] = useState<NodeStatus>(d.status ?? "idle");
   const [outputUrl, setOutputUrl] = useState(d.outputImageUrl ?? "");
   const [error, setError] = useState(d.error ?? "");
-  const [hoveredHandle, setHoveredHandle] = useState<string | null>(null);
 
   const handleDelete = useCallback(() => {
     deleteElements({ nodes: [{ id }] });
@@ -111,8 +110,6 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
         id="base"
         style={HANDLE_BASE_STYLE}
         className="!w-4 !h-4 !bg-stone-400 !border-2 !border-white"
-        onMouseEnter={() => setHoveredHandle("base")}
-        onMouseLeave={() => setHoveredHandle(null)}
       />
       <Handle
         type="target"
@@ -120,26 +117,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
         id="ref"
         style={HANDLE_REF_STYLE}
         className="!w-4 !h-4 !bg-acacia-400 !border-2 !border-white"
-        onMouseEnter={() => setHoveredHandle("ref")}
-        onMouseLeave={() => setHoveredHandle(null)}
       />
-
-      {hoveredHandle === "base" && (
-        <span
-          className="absolute left-5 text-[9px] text-stone-500 bg-white/95 px-1 rounded pointer-events-none select-none -translate-y-1/2 z-10"
-          style={{ top: "30%" }}
-        >
-          base
-        </span>
-      )}
-      {hoveredHandle === "ref" && (
-        <span
-          className="absolute left-5 text-[9px] text-acacia-500 bg-white/95 px-1 rounded pointer-events-none select-none -translate-y-1/2 z-10"
-          style={{ top: "60%" }}
-        >
-          ref
-        </span>
-      )}
 
       <div className="p-3 space-y-2">
         {!isBaseConnected && (
@@ -182,21 +160,11 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
         </div>
       )}
 
-      {hoveredHandle === "output" && (
-        <span
-          className="absolute right-5 text-[9px] text-sage-600 bg-white/95 px-1 rounded pointer-events-none select-none -translate-y-1/2 z-10"
-          style={{ top: "50%" }}
-        >
-          out
-        </span>
-      )}
       <Handle
         type="source"
         position={Position.Right}
         id="output"
         className="!w-4 !h-4 !bg-sage-500 !border-2 !border-white"
-        onMouseEnter={() => setHoveredHandle("output")}
-        onMouseLeave={() => setHoveredHandle(null)}
       />
     </div>
   );
