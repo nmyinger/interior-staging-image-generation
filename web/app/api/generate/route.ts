@@ -4,15 +4,17 @@ import { authOptions } from "@/lib/auth";
 import { GoogleGenAI } from "@google/genai";
 import { sql, genId } from "@/lib/db";
 import { ALLOWED_MODEL_IDS, DEFAULT_MODEL_ID, type ModelId } from "@/lib/models";
+import { resolveAccess } from "@/lib/access";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function userId(session: any) {
-  return (session?.user as { id?: string } | undefined)?.id;
+function getUidEmail(session: any) {
+  const user = session?.user as { id?: string; email?: string } | undefined;
+  return { uid: user?.id ?? null, email: user?.email ?? null };
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  const uid = userId(session);
+  const authSession = await getServerSession(authOptions);
+  const { uid, email } = getUidEmail(authSession);
   if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { nodeId, prompt, model: requestedModel } = await req.json() as { nodeId: string; prompt: string; model?: string };
@@ -24,19 +26,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "nodeId and prompt are required" }, { status: 400 });
   }
 
-  // Verify generation node exists and belongs to an owned session
-  const genRows = await sql`
-    SELECT n.id, n.session_id
-    FROM canvas_nodes n
-    JOIN sessions s ON s.id = n.session_id
-    WHERE n.id = ${nodeId} AND s.owner_user_id = ${uid} AND n.type = 'generation'
+  // Resolve session for this node
+  const nodeRows = await sql`
+    SELECT session_id FROM canvas_nodes WHERE id = ${nodeId} AND type = 'generation'
   `;
-  if (!genRows.length) {
+  if (!nodeRows.length) {
     return NextResponse.json({ error: "Generation node not found" }, { status: 404 });
   }
-  const sessionId = genRows[0].session_id as string;
+  const sessionId = nodeRows[0].session_id as string;
 
-  // Read current outputB64 now so we can save it to history after a successful generation
+  const access = await resolveAccess(sessionId, uid, email);
+  if (!access.canWrite) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Read current outputB64 before generation so we can push it to history on success
   const nodeDataRows = await sql`
     SELECT data->>'outputB64' AS output_b64 FROM canvas_nodes WHERE id = ${nodeId}
   `;

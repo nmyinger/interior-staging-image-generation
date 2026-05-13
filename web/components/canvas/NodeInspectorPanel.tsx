@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 import { useNodes, useReactFlow, Panel } from "@xyflow/react";
 import {
   X,
@@ -13,6 +13,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { GENERATION_MODELS, DEFAULT_MODEL_ID } from "@/lib/models";
+import { SessionContext } from "./SessionContext";
 import type { GenerationNodeData, PhotoNodeData } from "@/types/nodes";
 
 interface HistoryEntry {
@@ -30,6 +31,7 @@ export function NodeInspectorPanel({
 }) {
   const nodes = useNodes();
   const { updateNodeData, deleteElements } = useReactFlow();
+  const { readOnly } = useContext(SessionContext);
 
   const node = nodes.find((n) => n.id === selectedNodeId);
   const genData = node?.type === "generation"
@@ -151,55 +153,58 @@ export function NodeInspectorPanel({
                 </p>
                 <Textarea
                   value={localPrompt}
-                  onChange={(e) => {
+                  onChange={readOnly ? undefined : (e) => {
                     setLocalPrompt(e.target.value);
                     updateNodeData(selectedNodeId, { prompt: e.target.value });
                   }}
-                  placeholder="Describe the staging…"
-                  className="text-xs resize-none h-24"
+                  readOnly={readOnly}
+                  placeholder={readOnly ? "" : "Describe the staging…"}
+                  className={`text-xs resize-none h-24 ${readOnly ? "cursor-default bg-stone-50 text-stone-500" : ""}`}
                 />
               </div>
 
-              {/* Model */}
-              <div className="p-4 space-y-2">
-                <p className="text-[10px] font-medium text-stone-400 uppercase tracking-wide">
-                  Model
-                </p>
-                <div className="space-y-1">
-                  {GENERATION_MODELS.map((m) => {
-                    const active = currentModel === m.id;
-                    return (
-                      <button
-                        key={m.id}
-                        onClick={() =>
-                          updateNodeData(selectedNodeId, { model: m.id })
-                        }
-                        className={`w-full text-left px-2.5 py-2 rounded-lg border transition-colors ${
-                          active
-                            ? "border-sage-300 bg-sage-50"
-                            : "border-transparent hover:border-stone-200 hover:bg-stone-50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span
-                            className={`text-xs font-medium ${
-                              active ? "text-sage-800" : "text-stone-700"
-                            }`}
-                          >
-                            {m.label}
-                          </span>
-                          <span className="text-[10px] text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">
-                            {m.provider}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-stone-400 mt-0.5">
-                          {m.note}
-                        </p>
-                      </button>
-                    );
-                  })}
+              {/* Model — hidden in readOnly */}
+              {!readOnly && (
+                <div className="p-4 space-y-2">
+                  <p className="text-[10px] font-medium text-stone-400 uppercase tracking-wide">
+                    Model
+                  </p>
+                  <div className="space-y-1">
+                    {GENERATION_MODELS.map((m) => {
+                      const active = currentModel === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          onClick={() =>
+                            updateNodeData(selectedNodeId, { model: m.id })
+                          }
+                          className={`w-full text-left px-2.5 py-2 rounded-lg border transition-colors ${
+                            active
+                              ? "border-sage-300 bg-sage-50"
+                              : "border-transparent hover:border-stone-200 hover:bg-stone-50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className={`text-xs font-medium ${
+                                active ? "text-sage-800" : "text-stone-700"
+                              }`}
+                            >
+                              {m.label}
+                            </span>
+                            <span className="text-[10px] text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">
+                              {m.provider}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-stone-400 mt-0.5">
+                            {m.note}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Output */}
               {(displayImageUrl || genData.status === "done") && (
@@ -248,7 +253,7 @@ export function NodeInspectorPanel({
                     />
                   )}
 
-                  {historyStep > 0 && (
+                  {!readOnly && historyStep > 0 && (
                     <Button
                       size="sm"
                       onClick={handleRestore}
@@ -275,16 +280,18 @@ export function NodeInspectorPanel({
           )}
         </div>
 
-        {/* Footer — delete */}
-        <div className="px-4 py-3 border-t border-stone-200 shrink-0">
-          <button
-            onClick={handleDelete}
-            className="w-full flex items-center justify-center gap-2 text-xs text-stone-400 hover:text-clay-500 hover:bg-clay-50 rounded-lg py-2 transition-colors"
-          >
-            <Trash2 size={13} />
-            Delete node
-          </button>
-        </div>
+        {/* Footer — delete (hidden in readOnly) */}
+        {!readOnly && (
+          <div className="px-4 py-3 border-t border-stone-200 shrink-0">
+            <button
+              onClick={handleDelete}
+              className="w-full flex items-center justify-center gap-2 text-xs text-stone-400 hover:text-clay-500 hover:bg-clay-50 rounded-lg py-2 transition-colors"
+            >
+              <Trash2 size={13} />
+              Delete node
+            </button>
+          </div>
+        )}
       </div>
     </Panel>
   );

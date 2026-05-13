@@ -23,7 +23,7 @@ const HANDLE_REF_STYLE = { top: "60%" };
 
 export const GenerationNode = memo(function GenerationNode({ id, data, selected }: NodeProps) {
   const d = data as unknown as GenerationNodeData;
-  const sessionId = useContext(SessionContext);
+  const { sessionId, readOnly } = useContext(SessionContext);
   const { updateNodeData } = useReactFlow();
 
   // Reactive: re-renders when any edge connecting this node's base handle changes
@@ -98,25 +98,30 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
         )}
         <Textarea
           value={d.prompt ?? ""}
-          onChange={e => updateNodeData(id, { prompt: e.target.value })}
-          placeholder="Describe the staging…"
-          className="text-xs resize-none h-20 nodrag"
+          onChange={readOnly ? undefined : e => updateNodeData(id, { prompt: e.target.value })}
+          readOnly={readOnly}
+          placeholder={readOnly ? "" : "Describe the staging…"}
+          className={`text-xs resize-none h-20 nodrag ${readOnly ? "cursor-default bg-stone-50 text-stone-500" : ""}`}
           onMouseDown={e => e.stopPropagation()}
         />
-        <Button
-          size="sm"
-          className={`w-full text-white ${status === "error" ? "bg-clay-500 hover:bg-clay-600" : "bg-sage-600 hover:bg-sage-700"}`}
-          onClick={generate}
-          disabled={status === "generating" || !isBaseConnected}
-        >
-          {status === "generating" ? (
-            <><Loader2 size={12} className="mr-1 animate-spin" /> Generating…</>
-          ) : (
-            <><Sparkles size={12} className="mr-1" /> {buttonLabel}</>
-          )}
-        </Button>
-        {status === "error" && (
-          <p className="text-[10px] text-clay-500">{error}</p>
+        {!readOnly && (
+          <>
+            <Button
+              size="sm"
+              className={`w-full text-white ${status === "error" ? "bg-clay-500 hover:bg-clay-600" : "bg-sage-600 hover:bg-sage-700"}`}
+              onClick={generate}
+              disabled={status === "generating" || !isBaseConnected}
+            >
+              {status === "generating" ? (
+                <><Loader2 size={12} className="mr-1 animate-spin" /> Generating…</>
+              ) : (
+                <><Sparkles size={12} className="mr-1" /> {buttonLabel}</>
+              )}
+            </Button>
+            {status === "error" && (
+              <p className="text-[10px] text-clay-500">{error}</p>
+            )}
+          </>
         )}
       </div>
 

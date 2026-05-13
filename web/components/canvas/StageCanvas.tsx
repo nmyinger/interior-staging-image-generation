@@ -73,7 +73,7 @@ interface DBEdge {
   target_handle: string;
 }
 
-export function StageCanvas({ sessionId }: { sessionId: string }) {
+export function StageCanvas({ sessionId, readOnly }: { sessionId: string; readOnly?: boolean }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [loading, setLoading] = useState(true);
@@ -202,7 +202,7 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
   // saveEnabled is set 800 ms after load completes, ensuring debouncedNodes has caught up
   // and React Flow's initial layout has settled before we write anything.
   useEffect(() => {
-    if (!saveEnabled.current || loading) return;
+    if (!saveEnabled.current || loading || readOnly) return;
     setSaveState("saving");
 
     const dbNodes = debouncedNodes.map(n => {
@@ -239,7 +239,7 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
     })
       .then(r => (r.ok ? setSaveState("saved") : setSaveState("error")))
       .catch(() => setSaveState("error"));
-  }, [debouncedEdges, debouncedNodes, loading, sessionId]);
+  }, [debouncedEdges, debouncedNodes, loading, readOnly, sessionId]);
 
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
     if (changes.some(c => c.type === "remove")) snapshot();
@@ -412,7 +412,7 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
   }
 
   return (
-    <SessionContext.Provider value={sessionId}>
+    <SessionContext.Provider value={{ sessionId, readOnly: readOnly ?? false }}>
       <div className="w-full h-full relative">
         <input
           ref={fileInputRef}
@@ -432,30 +432,34 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
           edges={edges}
           onNodesChange={handleNodesChange}
           onEdgesChange={handleEdgesChange}
-          onConnect={onConnect}
+          onConnect={readOnly ? undefined : onConnect}
           isValidConnection={isValidConnection}
-          onNodeDragStart={snapshot}
+          onNodeDragStart={readOnly ? undefined : snapshot}
           onSelectionChange={({ nodes: sel }) => setSelectedNodeId(sel[0]?.id ?? null)}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
+          nodesDraggable={!readOnly}
+          nodesConnectable={!readOnly}
+          deleteKeyCode={readOnly ? null : ["Delete", "Backspace"]}
           fitView
           fitViewOptions={{ padding: 0.15 }}
           minZoom={0.2}
           maxZoom={2}
-          deleteKeyCode={["Delete", "Backspace"]}
           onInit={instance => { flowInstance.current = instance; }}
-          onDrop={onDrop}
-          onDragOver={onDragOver}
-          onDragEnter={onDragEnter}
-          onDragLeave={onDragLeave}
+          onDrop={readOnly ? undefined : onDrop}
+          onDragOver={readOnly ? undefined : onDragOver}
+          onDragEnter={readOnly ? undefined : onDragEnter}
+          onDragLeave={readOnly ? undefined : onDragLeave}
         >
           <Background gap={20} color="var(--color-stone-200)" />
-          <MenuBar
-            onUpload={() => fileInputRef.current?.click()}
-            onAddNode={handleAddGenerationNode}
-            uploading={uploading}
-            saveState={saveState}
-          />
+          {!readOnly && (
+            <MenuBar
+              onUpload={() => fileInputRef.current?.click()}
+              onAddNode={handleAddGenerationNode}
+              uploading={uploading}
+              saveState={saveState}
+            />
+          )}
           {selectedNodeId && (
             <NodeInspectorPanel
               key={selectedNodeId}

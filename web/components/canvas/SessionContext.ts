@@ -1,3 +1,8 @@
 import { createContext } from "react";
 
-export const SessionContext = createContext<string>("");
+export interface SessionContextValue {
+  sessionId: string;
+  readOnly: boolean;
+}
+
+export const SessionContext = createContext<SessionContextValue>({ sessionId: "", readOnly: false });

@@ -2,27 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { resolveAccess, verifyPasswordCookie, passwordCookieName } from "@/lib/access";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function userId(session: any) {
-  return (session?.user as { id?: string } | undefined)?.id;
-}
-
-async function verifySession(sessionId: string, uid: string): Promise<boolean> {
-  const rows = await sql`SELECT 1 FROM sessions WHERE id = ${sessionId} AND owner_user_id = ${uid}`;
-  return rows.length > 0;
+function getUidEmail(session: any) {
+  const user = session?.user as { id?: string; email?: string } | undefined;
+  return { uid: user?.id ?? null, email: user?.email ?? null };
 }
 
 export async function GET(req: NextRequest) {
   const authSession = await getServerSession(authOptions);
-  const uid = userId(authSession);
-  if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { uid, email } = getUidEmail(authSession);
 
   const sessionId = req.nextUrl.searchParams.get("sessionId");
   if (!sessionId) return NextResponse.json({ error: "sessionId required" }, { status: 400 });
 
-  if (!(await verifySession(sessionId, uid))) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const access = await resolveAccess(sessionId, uid, email);
+  if (!access.canRead) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (access.needsPassword && access.passwordHash) {
+    const cookieValue = req.cookies.get(passwordCookieName(sessionId))?.value;
+    if (!verifyPasswordCookie(cookieValue, sessionId, access.passwordHash)) {
+      return NextResponse.json({ error: "Password required" }, { status: 401 });
+    }
   }
 
   const [nodes, edges] = await Promise.all([
@@ -35,7 +37,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const authSession = await getServerSession(authOptions);
-  const uid = userId(authSession);
+  const { uid, email } = getUidEmail(authSession);
+
   if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { sessionId, nodes, edges } = await req.json() as {
@@ -45,11 +48,10 @@ export async function POST(req: NextRequest) {
   };
 
   if (!sessionId) return NextResponse.json({ error: "sessionId required" }, { status: 400 });
-  if (!(await verifySession(sessionId, uid))) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
 
-  // Upsert all current nodes
+  const access = await resolveAccess(sessionId, uid, email);
+  if (!access.canWrite) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   for (const n of nodes) {
     await sql`
       INSERT INTO canvas_nodes (id, session_id, type, x, y, data)
@@ -60,7 +62,6 @@ export async function POST(req: NextRequest) {
     `;
   }
 
-  // Delete nodes no longer on the canvas
   if (nodes.length > 0) {
     const ids = nodes.map(n => n.id);
     await sql`DELETE FROM canvas_nodes WHERE session_id = ${sessionId} AND id != ALL(${ids})`;
@@ -68,7 +69,6 @@ export async function POST(req: NextRequest) {
     await sql`DELETE FROM canvas_nodes WHERE session_id = ${sessionId}`;
   }
 
-  // Replace all edges
   await sql`DELETE FROM canvas_edges WHERE session_id = ${sessionId}`;
   for (const e of edges) {
     await sql`

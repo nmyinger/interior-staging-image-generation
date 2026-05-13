@@ -2,29 +2,44 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql } from "@/lib/db";
+import { resolveAccess, verifyPasswordCookie, passwordCookieName } from "@/lib/access";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function userId(session: any) {
-  return (session?.user as { id?: string } | undefined)?.id;
+function getUidEmail(session: any) {
+  const user = session?.user as { id?: string; email?: string } | undefined;
+  return { uid: user?.id ?? null, email: user?.email ?? null };
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ nodeId: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  const uid = userId(session);
-  if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authSession = await getServerSession(authOptions);
+  const { uid, email } = getUidEmail(authSession);
 
   const { nodeId } = await params;
 
+  // Look up the session for this node
+  const nodeRows = await sql`SELECT session_id FROM canvas_nodes WHERE id = ${nodeId}`;
+  if (!nodeRows.length) return NextResponse.json({ history: [] });
+
+  const sessionId = nodeRows[0].session_id as string;
+
+  const access = await resolveAccess(sessionId, uid, email);
+  if (!access.canRead) return NextResponse.json({ history: [] });
+
+  if (access.needsPassword && access.passwordHash) {
+    const cookieValue = req.cookies.get(passwordCookieName(sessionId))?.value;
+    if (!verifyPasswordCookie(cookieValue, sessionId, access.passwordHash)) {
+      return NextResponse.json({ error: "Password required" }, { status: 401 });
+    }
+  }
+
   const rows = await sql`
-    SELECT gh.id, gh.output_b64, gh.created_at
-    FROM generation_history gh
-    JOIN canvas_nodes n ON n.id = gh.node_id
-    JOIN sessions s ON s.id = n.session_id
-    WHERE gh.node_id = ${nodeId} AND s.owner_user_id = ${uid}
-    ORDER BY gh.created_at DESC
+    SELECT id, output_b64, created_at
+    FROM generation_history
+    WHERE node_id = ${nodeId}
+    ORDER BY created_at DESC
   `;
 
   const history = rows.map(r => ({

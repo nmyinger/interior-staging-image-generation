@@ -85,4 +85,21 @@ export async function migrate() {
     )
   `;
   await sql`CREATE INDEX IF NOT EXISTS generation_history_node_idx ON generation_history(node_id)`;
+
+  // Sharing: link access controls + per-user invite list
+  await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS link_access TEXT NOT NULL DEFAULT 'private'`;
+  await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS share_password_hash TEXT`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS session_invites (
+      id         TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      email      TEXT NOT NULL,
+      role       TEXT NOT NULL DEFAULT 'viewer',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (session_id, email)
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS session_invites_session_idx ON session_invites(session_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS session_invites_email_idx ON session_invites(email)`;
 }
