@@ -3,7 +3,7 @@
  * Runs migrations and seeds photos from ../Source Photos/ into the DB.
  * Idempotent — safe to call multiple times. Skip photos already in DB.
  */
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { sql, migrate } from "@/lib/db";
 import { readFile, readdir } from "fs/promises";
 import path from "path";
@@ -20,7 +20,12 @@ const ROOM_TO_ZONE: Record<string, string> = {
   bathroom_closet: "bathroom_suite",
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const secret = process.env.SETUP_SECRET;
+  if (secret && req.headers.get("x-setup-secret") !== secret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   await migrate();
 
   const [analysisRaw, manifestsRaw] = await Promise.all([

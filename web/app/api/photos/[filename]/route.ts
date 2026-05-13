@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import sharp from "sharp";
 
@@ -6,6 +8,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ filename: string }> }
 ) {
+  const session = await getServerSession(authOptions);
+  if (!(session?.user as { id?: string } | undefined)?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { filename } = await params;
   const rows = await sql`
     SELECT image_b64, mime_type FROM photos WHERE filename = ${filename}

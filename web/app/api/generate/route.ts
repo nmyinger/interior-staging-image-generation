@@ -3,15 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { GoogleGenAI } from "@google/genai";
 import { sql } from "@/lib/db";
-
-// Keep in sync with GENERATION_MODELS in components/canvas/NodeSettingsPanel.tsx
-const ALLOWED_MODEL_IDS = [
-  "gemini-3.1-flash-image-preview",
-  "gemini-3-pro-image-preview",
-  "gemini-2.5-flash-image",
-] as const;
-
-const DEFAULT_MODEL = ALLOWED_MODEL_IDS[0];
+import { ALLOWED_MODEL_IDS, DEFAULT_MODEL_ID, type ModelId } from "@/lib/models";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function userId(session: any) {
@@ -24,9 +16,9 @@ export async function POST(req: NextRequest) {
   if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { nodeId, prompt, model: requestedModel } = await req.json() as { nodeId: string; prompt: string; model?: string };
-  const model = ALLOWED_MODEL_IDS.includes(requestedModel as typeof ALLOWED_MODEL_IDS[number])
+  const model = ALLOWED_MODEL_IDS.includes(requestedModel as ModelId)
     ? (requestedModel as string)
-    : DEFAULT_MODEL;
+    : DEFAULT_MODEL_ID;
 
   if (!nodeId || !prompt) {
     return NextResponse.json({ error: "nodeId and prompt are required" }, { status: 400 });
@@ -90,12 +82,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Base node must be a photo or generation node" }, { status: 400 });
   }
 
-  // Resolve optional reference images from ref edges
-  const refEdges = await sql`
-    SELECT source FROM canvas_edges
-    WHERE session_id = ${sessionId} AND target = ${nodeId} AND target_handle = 'ref'
-  `;
-
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "GEMINI_API_KEY not configured" }, { status: 500 });
 
@@ -104,25 +90,23 @@ export async function POST(req: NextRequest) {
   type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
   const parts: Part[] = [
     { text: prompt },
-    { inlineData: { mimeType: baseMime as string, data: baseB64 as string } },
+    { inlineData: { mimeType: baseMime, data: baseB64 } },
   ];
 
-  for (const refEdge of refEdges) {
-    const refRows = await sql`
-      SELECT type, data FROM canvas_nodes WHERE id = ${refEdge.source as string} AND session_id = ${sessionId}
-    `;
-    if (!refRows.length) continue;
-    const ref = refRows[0] as { type: string; data: Record<string, unknown> };
-
-    if (ref.type === "photo") {
-      const refPhotoRows = await sql`
-        SELECT image_b64, mime_type FROM photos WHERE filename = ${ref.data.filename as string}
-      `;
-      if (refPhotoRows.length) {
-        parts.push({ inlineData: { mimeType: refPhotoRows[0].mime_type as string, data: refPhotoRows[0].image_b64 as string } });
-      }
-    } else if (ref.type === "generation" && ref.data.outputB64) {
-      parts.push({ inlineData: { mimeType: "image/jpeg", data: ref.data.outputB64 as string } });
+  // Resolve optional reference images — single JOIN instead of N+1 loop
+  const refRows = await sql`
+    SELECT n.type, n.data, p.image_b64, p.mime_type
+    FROM canvas_edges e
+    JOIN canvas_nodes n ON n.id = e.source AND n.session_id = ${sessionId}
+    LEFT JOIN photos p ON n.type = 'photo' AND p.filename = (n.data->>'filename')
+    WHERE e.session_id = ${sessionId} AND e.target = ${nodeId} AND e.target_handle = 'ref'
+  `;
+  for (const ref of refRows) {
+    const refData = ref.data as Record<string, unknown>;
+    if (ref.type === "photo" && ref.image_b64) {
+      parts.push({ inlineData: { mimeType: ref.mime_type as string, data: ref.image_b64 as string } });
+    } else if (ref.type === "generation" && refData.outputB64) {
+      parts.push({ inlineData: { mimeType: "image/jpeg", data: refData.outputB64 as string } });
     }
   }
 

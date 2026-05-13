@@ -88,7 +88,6 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const initialized = useRef(false);
-  const saveEnabled = useRef(false);
   const dragCounter = useRef(0);
   const flowInstance = useRef<{ screenToFlowPosition: (p: { x: number; y: number }) => { x: number; y: number } } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -172,7 +171,6 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
       setLoadError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoading(false);
-      setTimeout(() => { saveEnabled.current = true; }, 1500);
     }
   }, [sessionId, setNodes, setEdges]);
 
@@ -193,9 +191,12 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
     }
   }, [saveState]);
 
-  // Debounced save: serialize all nodes + edges to DB
+  // Debounced save: serialize all nodes + edges to DB.
+  // Skip when debounced values haven't caught up to current state — guards against
+  // premature saves right after load (where debouncedNodes is still the pre-load empty array).
   useEffect(() => {
-    if (!saveEnabled.current || loading) return;
+    if (loading) return;
+    if (debouncedNodes !== nodesRef.current || debouncedEdges !== edgesRef.current) return;
     setSaveState("saving");
 
     const dbNodes = debouncedNodes.map(n => {

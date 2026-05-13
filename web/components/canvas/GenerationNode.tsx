@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SessionContext } from "./SessionContext";
 import type { GenerationNodeData, NodeStatus } from "@/types/nodes";
-import { DEFAULT_MODEL_ID } from "@/types/nodes";
+import { DEFAULT_MODEL_ID } from "@/lib/models";
 
 function StatusDot({ status }: { status: NodeStatus }) {
   const cls =
