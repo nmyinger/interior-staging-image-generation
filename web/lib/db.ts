@@ -74,4 +74,15 @@ export async function migrate() {
     `;
     await sql`CREATE INDEX canvas_edges_session ON canvas_edges(session_id)`;
   }
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS generation_history (
+      id         TEXT PRIMARY KEY,
+      node_id    TEXT NOT NULL REFERENCES canvas_nodes(id) ON DELETE CASCADE,
+      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      output_b64 TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS generation_history_node_idx ON generation_history(node_id)`;
 }

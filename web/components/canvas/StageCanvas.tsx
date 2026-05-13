@@ -22,7 +22,7 @@ import { SourceNode } from "./SourceNode";
 import { GenerationNode } from "./GenerationNode";
 import { DeletableEdge } from "./DeletableEdge";
 import { MenuBar } from "./MenuBar";
-import { NodeSettingsPanel } from "./NodeSettingsPanel";
+import { NodeInspectorPanel } from "./NodeInspectorPanel";
 import { SessionContext } from "./SessionContext";
 import type { PhotoNodeData, GenerationNodeData } from "@/types/nodes";
 
@@ -178,6 +178,15 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
       loadCanvas();
     }
   }, [loadCanvas]);
+
+  // Clear ReactFlow's internal selection state when the inspector panel is closed
+  useEffect(() => {
+    if (selectedNodeId !== null) return;
+    setNodes(nds => {
+      if (!nds.some(n => n.selected)) return nds;
+      return nds.map(n => (n.selected ? { ...n, selected: false } : n));
+    });
+  }, [selectedNodeId, setNodes]);
 
   const debouncedEdges = useDebounce(edges, 500);
   const debouncedNodes = useDebounce(nodes, 500);
@@ -447,8 +456,12 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
             uploading={uploading}
             saveState={saveState}
           />
-          {selectedNodeId && nodes.find(n => n.id === selectedNodeId)?.type === "generation" && (
-            <NodeSettingsPanel selectedNodeId={selectedNodeId} />
+          {selectedNodeId && (
+            <NodeInspectorPanel
+              key={selectedNodeId}
+              selectedNodeId={selectedNodeId}
+              onClose={() => setSelectedNodeId(null)}
+            />
           )}
         </ReactFlow>
       </div>

@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useContext, useState } from "react";
 import { Handle, Position, useReactFlow, useStore, type NodeProps } from "@xyflow/react";
-import { Loader2, Sparkles, Download, X, ImageIcon } from "lucide-react";
+import { Loader2, Sparkles, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SessionContext } from "./SessionContext";
@@ -24,21 +24,16 @@ const HANDLE_REF_STYLE = { top: "60%" };
 export const GenerationNode = memo(function GenerationNode({ id, data, selected }: NodeProps) {
   const d = data as unknown as GenerationNodeData;
   const sessionId = useContext(SessionContext);
-  const { deleteElements, updateNodeData } = useReactFlow();
+  const { updateNodeData } = useReactFlow();
 
   // Reactive: re-renders when any edge connecting this node's base handle changes
   const isBaseConnected = useStore(s =>
     s.edges.some(e => e.target === id && e.targetHandle === "base")
   );
 
-  const [prompt, setPrompt] = useState(d.prompt ?? "");
   const [status, setStatus] = useState<NodeStatus>(d.status ?? "idle");
   const [outputUrl, setOutputUrl] = useState(d.outputImageUrl ?? "");
   const [error, setError] = useState(d.error ?? "");
-
-  const handleDelete = useCallback(() => {
-    deleteElements({ nodes: [{ id }] });
-  }, [id, deleteElements]);
 
   const generate = useCallback(async () => {
     if (!isBaseConnected) return;
@@ -46,11 +41,13 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
     setError("");
 
     try {
-      const model = (data as unknown as GenerationNodeData).model ?? DEFAULT_MODEL_ID;
+      const nodeData = data as unknown as GenerationNodeData;
+      const model = nodeData.model ?? DEFAULT_MODEL_ID;
+      const currentPrompt = nodeData.prompt ?? "";
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nodeId: id, sessionId, prompt, model }),
+        body: JSON.stringify({ nodeId: id, sessionId, prompt: currentPrompt, model }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Generation failed");
@@ -59,21 +56,12 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
       const b64 = dataUrl.replace(/^data:[^;]+;base64,/, "");
       setOutputUrl(dataUrl);
       setStatus("done");
-      // Merge output into node data so the debounced save persists it
-      updateNodeData(id, { outputB64: b64, outputImageUrl: dataUrl, status: "done", prompt });
+      updateNodeData(id, { outputB64: b64, outputImageUrl: dataUrl, status: "done", prompt: currentPrompt });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
       setStatus("error");
     }
-  }, [id, sessionId, prompt, isBaseConnected, updateNodeData, data]);
-
-  const download = useCallback(() => {
-    if (!outputUrl) return;
-    const a = document.createElement("a");
-    a.href = outputUrl;
-    a.download = `staged_${id}.jpg`;
-    a.click();
-  }, [outputUrl, id]);
+  }, [id, sessionId, isBaseConnected, updateNodeData, data]);
 
   const buttonLabel =
     status === "error" ? "Retry"
@@ -82,26 +70,8 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
 
   return (
     <div className={`bg-white border-2 ${selected ? "border-sage-500 ring-2 ring-sage-200" : "border-sage-200"} rounded-[var(--radius-node)] shadow-sm w-64 overflow-hidden transition-[border-color,box-shadow]`}>
-      <div className="px-3 py-2 bg-sage-50 border-b border-sage-200 flex items-center justify-between">
+      <div className="px-3 py-2 bg-sage-50 border-b border-sage-200 flex items-center">
         <StatusDot status={status} />
-        <div className="flex items-center gap-1.5">
-          {status === "done" && (
-            <button
-              onClick={download}
-              className="text-stone-400 hover:text-sage-600 transition-colors nodrag"
-              title="Download staged image"
-            >
-              <Download size={13} />
-            </button>
-          )}
-          <button
-            onClick={handleDelete}
-            className="text-stone-300 hover:text-clay-400 transition-colors nodrag"
-            title="Delete node"
-          >
-            <X size={13} />
-          </button>
-        </div>
       </div>
 
       <Handle
@@ -127,11 +97,8 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
           </div>
         )}
         <Textarea
-          value={prompt}
-          onChange={e => {
-            setPrompt(e.target.value);
-            updateNodeData(id, { prompt: e.target.value });
-          }}
+          value={d.prompt ?? ""}
+          onChange={e => updateNodeData(id, { prompt: e.target.value })}
           placeholder="Describe the staging…"
           className="text-xs resize-none h-20 nodrag"
           onMouseDown={e => e.stopPropagation()}

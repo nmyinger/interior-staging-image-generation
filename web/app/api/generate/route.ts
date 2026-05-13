@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { GoogleGenAI } from "@google/genai";
-import { sql } from "@/lib/db";
+import { sql, genId } from "@/lib/db";
 import { ALLOWED_MODEL_IDS, DEFAULT_MODEL_ID, type ModelId } from "@/lib/models";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,6 +35,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Generation node not found" }, { status: 404 });
   }
   const sessionId = genRows[0].session_id as string;
+
+  // Read current outputB64 now so we can save it to history after a successful generation
+  const nodeDataRows = await sql`
+    SELECT data->>'outputB64' AS output_b64 FROM canvas_nodes WHERE id = ${nodeId}
+  `;
+  const previousOutputB64 = (nodeDataRows[0]?.output_b64 as string | null) ?? null;
 
   // Resolve base photo from connected edge (server-side, not trusted from client)
   const baseEdges = await sql`
@@ -129,6 +135,12 @@ export async function POST(req: NextRequest) {
           const outputB64 = part.inlineData.data;
           const outputMime = part.inlineData.mimeType ?? "image/jpeg";
 
+          if (previousOutputB64) {
+            await sql`
+              INSERT INTO generation_history (id, node_id, session_id, output_b64, created_at)
+              VALUES (${genId()}, ${nodeId}, ${sessionId}, ${previousOutputB64}, NOW())
+            `;
+          }
           await sql`
             UPDATE canvas_nodes
             SET data = data || jsonb_build_object('outputB64', ${outputB64}::text, 'status', 'done', 'prompt', ${prompt}::text)

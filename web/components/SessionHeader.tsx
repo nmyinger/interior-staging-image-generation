@@ -4,7 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { UserMenu } from "@/components/UserMenu";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Share2, Check } from "lucide-react";
 
 interface SessionHeaderProps {
   sessionId: string;
@@ -21,6 +21,7 @@ export function SessionHeader({ sessionId, initialName, ownerUserId }: SessionHe
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isOwner = (session?.user as { id?: string } | undefined)?.id === ownerUserId;
+  const [copied, setCopied] = useState(false);
 
   const startEdit = useCallback(() => {
     if (!isOwner) return;
@@ -81,6 +82,21 @@ export function SessionHeader({ sessionId, initialName, ownerUserId }: SessionHe
       )}
 
       <div className="ml-auto flex items-center gap-3">
+        <button
+          onClick={async () => {
+            await navigator.clipboard.writeText(window.location.href);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          }}
+          className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700 transition-colors"
+          title="Copy session link"
+        >
+          {copied ? (
+            <><Check size={14} className="text-moss-500" /><span>Copied</span></>
+          ) : (
+            <><Share2 size={14} /><span className="hidden sm:block">Share</span></>
+          )}
+        </button>
         <UserMenu />
       </div>
     </header>
