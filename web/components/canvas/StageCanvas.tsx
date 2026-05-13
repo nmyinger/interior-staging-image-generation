@@ -168,6 +168,7 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
       setLoadError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoading(false);
+      setTimeout(() => { saveEnabled.current = true; }, 800);
     }
   }, [sessionId, setNodes, setEdges]);
 
@@ -189,11 +190,10 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
   }, [saveState]);
 
   // Debounced save: serialize all nodes + edges to DB.
-  // Skip when debounced values haven't caught up to current state — guards against
-  // premature saves right after load (where debouncedNodes is still the pre-load empty array).
+  // saveEnabled is set 800 ms after load completes, ensuring debouncedNodes has caught up
+  // and React Flow's initial layout has settled before we write anything.
   useEffect(() => {
-    if (loading) return;
-    if (debouncedNodes !== nodesRef.current || debouncedEdges !== edgesRef.current) return;
+    if (!saveEnabled.current || loading) return;
     setSaveState("saving");
 
     const dbNodes = debouncedNodes.map(n => {
