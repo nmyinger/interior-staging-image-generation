@@ -12,6 +12,8 @@ import {
   type NodeTypes,
   type Node,
   type Edge,
+  type NodeChange,
+  type EdgeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Loader2, Upload, AlertCircle } from "lucide-react";
@@ -87,6 +89,36 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
   const dragCounter = useRef(0);
   const flowInstance = useRef<{ screenToFlowPosition: (p: { x: number; y: number }) => { x: number; y: number } } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Undo history — stable refs so snapshot/undo never need to be recreated
+  const history = useRef<Array<{ nodes: Node[]; edges: Edge[] }>>([]);
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { edgesRef.current = edges; }, [edges]);
+
+  const snapshot = useCallback(() => {
+    history.current = [...history.current.slice(-29), { nodes: nodesRef.current, edges: edgesRef.current }];
+  }, []);
+
+  const undo = useCallback(() => {
+    const prev = history.current.pop();
+    if (!prev) return;
+    setNodes(prev.nodes);
+    setEdges(prev.edges);
+  }, [setNodes, setEdges]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key !== "z" || e.shiftKey) return;
+      const t = e.target as HTMLElement;
+      if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return;
+      e.preventDefault();
+      undo();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [undo]);
 
   const loadCanvas = useCallback(async () => {
     setLoading(true);
@@ -196,8 +228,19 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
       .catch(() => setSaveState("error"));
   }, [debouncedEdges, debouncedNodes, loading, sessionId]);
 
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    if (changes.some(c => c.type === "remove")) snapshot();
+    onNodesChange(changes);
+  }, [onNodesChange, snapshot]);
+
+  const handleEdgesChange = useCallback((changes: EdgeChange[]) => {
+    if (changes.some(c => c.type === "remove")) snapshot();
+    onEdgesChange(changes);
+  }, [onEdgesChange, snapshot]);
+
   const onConnect = useCallback(
-    (connection: Connection) =>
+    (connection: Connection) => {
+      snapshot();
       setEdges(eds =>
         addEdge(
           {
@@ -208,8 +251,9 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
           },
           eds
         )
-      ),
-    [setEdges]
+      );
+    },
+    [setEdges, snapshot]
   );
 
   // Upload a file and add a photo node at the given canvas position
@@ -234,6 +278,7 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
               filename: photo.filename,
               photoUrl: `/api/photos/${encodeURIComponent(photo.filename)}?w=400`,
             };
+            snapshot();
             setNodes(nds => [
               ...nds,
               { id: newId(), type: "photo", position, data: data as unknown as Record<string, unknown> },
@@ -244,11 +289,12 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
         reader.readAsDataURL(file);
       });
     },
-    [setNodes]
+    [setNodes, snapshot]
   );
 
   // Add an empty generation node at canvas center
   const handleAddGenerationNode = useCallback(() => {
+    snapshot();
     const pos = flowInstance.current?.screenToFlowPosition({
       x: window.innerWidth / 2,
       y: window.innerHeight / 2,
@@ -258,7 +304,7 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
       ...nds,
       { id: newId(), type: "generation", position: pos, data: data as unknown as Record<string, unknown> },
     ]);
-  }, [setNodes]);
+  }, [setNodes, snapshot]);
 
   const handleFileInput = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -363,9 +409,10 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
+          onNodesChange={handleNodesChange}
+          onEdgesChange={handleEdgesChange}
           onConnect={onConnect}
+          onNodeDragStart={snapshot}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView
