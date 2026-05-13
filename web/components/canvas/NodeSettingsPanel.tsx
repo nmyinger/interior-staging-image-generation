@@ -7,10 +7,22 @@ import { DEFAULT_MODEL_ID } from "@/types/nodes";
 // Keep model IDs in sync with ALLOWED_MODEL_IDS in app/api/generate/route.ts
 export const GENERATION_MODELS = [
   {
-    id: "gemini-2.0-flash-preview-image-generation",
-    label: "Gemini 2.0 Flash",
+    id: "gemini-3.1-flash-image-preview",
+    label: "Gemini 3.1 Flash",
     provider: "Gemini",
-    note: "Fast, balanced quality",
+    note: "4K output, fast generation",
+  },
+  {
+    id: "gemini-3-pro-image-preview",
+    label: "Gemini 3 Pro",
+    provider: "Gemini",
+    note: "Studio-quality, precise text",
+  },
+  {
+    id: "gemini-2.5-flash-image",
+    label: "Gemini 2.5 Flash",
+    provider: "Gemini",
+    note: "Stable, creative workflows",
   },
 ] as const;
 

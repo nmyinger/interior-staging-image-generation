@@ -6,7 +6,9 @@ import { sql } from "@/lib/db";
 
 // Keep in sync with GENERATION_MODELS in components/canvas/NodeSettingsPanel.tsx
 const ALLOWED_MODEL_IDS = [
-  "gemini-2.0-flash-preview-image-generation",
+  "gemini-3.1-flash-image-preview",
+  "gemini-3-pro-image-preview",
+  "gemini-2.5-flash-image",
 ] as const;
 
 const DEFAULT_MODEL = ALLOWED_MODEL_IDS[0];

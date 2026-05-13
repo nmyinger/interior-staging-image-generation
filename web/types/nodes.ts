@@ -1,6 +1,6 @@
 export type NodeStatus = "idle" | "generating" | "done" | "error";
 
-export const DEFAULT_MODEL_ID = "gemini-2.0-flash-preview-image-generation";
+export const DEFAULT_MODEL_ID = "gemini-3.1-flash-image-preview";
 
 export interface PhotoNodeData {
   filename: string;
