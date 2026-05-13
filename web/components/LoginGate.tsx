@@ -1,18 +1,68 @@
 "use client";
 
-import { useSession, signIn, signOut } from "next-auth/react";
-import { Loader2 } from "lucide-react";
+import { useSession, signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StageCanvas } from "@/components/canvas/StageCanvas";
+
+interface SessionRow {
+  id: string;
+  name: string;
+  created_at: string;
+}
 
 export function LoginGate() {
   const { data: session, status } = useSession();
+  const router = useRouter();
+  const [sessions, setSessions] = useState<SessionRow[] | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const editRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!session) return;
+    fetch("/api/sessions")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setSessions(data?.sessions ?? []));
+  }, [session]);
+
+  const createSession = useCallback(async () => {
+    setCreating(true);
+    const res = await fetch("/api/sessions", { method: "POST" });
+    if (res.ok) {
+      const { id } = await res.json();
+      router.push(`/session/${id}`);
+    } else {
+      setCreating(false);
+    }
+  }, [router]);
+
+  const startRename = useCallback((s: SessionRow, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setEditingId(s.id);
+    setEditDraft(s.name);
+    setTimeout(() => editRef.current?.select(), 0);
+  }, []);
+
+  const commitRename = useCallback(async (id: string) => {
+    const trimmed = editDraft.trim();
+    setEditingId(null);
+    if (!trimmed) return;
+    setSessions((prev) => (prev ?? []).map((s) => s.id === id ? { ...s, name: trimmed } : s));
+    await fetch(`/api/sessions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+  }, [editDraft]);
 
   if (status === "loading") {
     return (
-      <div className="h-full flex items-center justify-center text-slate-400">
-        <Loader2 className="animate-spin mr-2" size={18} />
-        Loading…
+      <div className="h-full flex items-center justify-center text-stone-300">
+        <Loader2 className="animate-spin" size={18} />
       </div>
     );
   }
@@ -46,10 +96,64 @@ export function LoginGate() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 min-h-0">
-        <StageCanvas userId={(session.user as { id?: string }).id!} />
-      </div>
+    <div className="max-w-2xl mx-auto px-6 py-10">
+      <h2 className="text-lg font-semibold text-stone-800 mb-6">Sessions</h2>
+
+      {sessions === null ? (
+        <div className="flex items-center justify-center py-16 text-stone-300">
+          <Loader2 className="animate-spin" size={20} />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            onClick={createSession}
+            disabled={creating}
+            className="group flex items-center gap-3 p-5 rounded-2xl border border-dashed border-stone-300 hover:border-stone-400 hover:bg-stone-50 transition-all text-left"
+          >
+            {creating ? (
+              <Loader2 size={15} className="text-stone-400 animate-spin shrink-0" />
+            ) : (
+              <Plus size={15} className="text-stone-400 group-hover:text-stone-600 shrink-0" />
+            )}
+            <span className="text-sm text-stone-400 group-hover:text-stone-600">New Session</span>
+          </button>
+
+          {sessions.map((s) => (
+            <div
+              key={s.id}
+              className="group relative flex flex-col justify-between p-5 bg-white rounded-2xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all cursor-pointer"
+              onClick={() => editingId !== s.id && router.push(`/session/${s.id}`)}
+            >
+              {editingId === s.id ? (
+                <input
+                  ref={editRef}
+                  value={editDraft}
+                  onChange={(e) => setEditDraft(e.target.value)}
+                  onBlur={() => commitRename(s.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitRename(s.id);
+                    if (e.key === "Escape") setEditingId(null);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-sm font-medium text-stone-800 bg-transparent border-b border-stone-300 outline-none w-full"
+                  autoFocus
+                />
+              ) : (
+                <span
+                  className="text-sm font-medium text-stone-800 leading-snug"
+                  onDoubleClick={(e) => startRename(s, e)}
+                  title="Double-click to rename"
+                >
+                  {s.name}
+                </span>
+              )}
+              <span className="text-xs text-stone-400 mt-3 block">
+                {new Date(s.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

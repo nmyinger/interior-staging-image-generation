@@ -11,12 +11,11 @@ export default function Home() {
           </div>
           <span className="text-sm font-semibold text-stone-800">Virtual Staging</span>
         </div>
-        <div className="ml-auto flex items-center gap-3">
-          <span className="text-xs text-stone-400 hidden sm:block">drag image onto canvas · connect handles · Delete to remove</span>
+        <div className="ml-auto">
           <UserMenu />
         </div>
       </header>
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <LoginGate />
       </div>
     </main>
