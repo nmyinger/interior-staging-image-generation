@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
 
           await sql`
             UPDATE canvas_nodes
-            SET data = data || jsonb_build_object('outputB64', ${outputB64}, 'status', 'done', 'prompt', ${prompt})
+            SET data = data || jsonb_build_object('outputB64', ${outputB64}::text, 'status', 'done', 'prompt', ${prompt}::text)
             WHERE id = ${nodeId} AND session_id = ${sessionId}
           `;
 
