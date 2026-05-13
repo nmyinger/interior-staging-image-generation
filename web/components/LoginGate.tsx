@@ -3,7 +3,7 @@
 import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface SessionRow {
@@ -19,7 +19,20 @@ export function LoginGate() {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const editRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpenId) return;
+    function handleMouseDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpenId(null);
+      }
+    }
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [menuOpenId]);
 
   useEffect(() => {
     if (!session) return;
@@ -45,6 +58,19 @@ export function LoginGate() {
     setEditingId(s.id);
     setEditDraft(s.name);
     setTimeout(() => editRef.current?.select(), 0);
+  }, []);
+
+  const startRenameFromMenu = useCallback((s: SessionRow) => {
+    setMenuOpenId(null);
+    setEditingId(s.id);
+    setEditDraft(s.name);
+    setTimeout(() => editRef.current?.select(), 0);
+  }, []);
+
+  const deleteSession = useCallback(async (id: string) => {
+    setMenuOpenId(null);
+    setSessions((prev) => (prev ?? []).filter((s) => s.id !== id));
+    await fetch(`/api/sessions/${id}`, { method: "DELETE" });
   }, []);
 
   const commitRename = useCallback(async (id: string) => {
@@ -122,8 +148,43 @@ export function LoginGate() {
             <div
               key={s.id}
               className="group relative flex flex-col justify-between p-5 bg-white rounded-2xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all cursor-pointer"
-              onClick={() => editingId !== s.id && router.push(`/session/${s.id}`)}
+              onClick={() => {
+                if (editingId === s.id) return;
+                if (menuOpenId === s.id) { setMenuOpenId(null); return; }
+                router.push(`/session/${s.id}`);
+              }}
             >
+              <button
+                className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-stone-100 transition-all"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpenId(menuOpenId === s.id ? null : s.id);
+                }}
+              >
+                <MoreHorizontal size={14} className="text-stone-400" />
+              </button>
+
+              {menuOpenId === s.id && (
+                <div
+                  ref={menuRef}
+                  className="absolute top-9 right-3 z-10 bg-white border border-stone-200 rounded-xl shadow-md py-1 min-w-[120px]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    className="w-full text-left px-3 py-2 text-xs text-stone-700 hover:bg-stone-50"
+                    onClick={() => startRenameFromMenu(s)}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    className="w-full text-left px-3 py-2 text-xs text-clay-600 hover:bg-stone-50"
+                    onClick={() => deleteSession(s.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+
               {editingId === s.id ? (
                 <input
                   ref={editRef}
