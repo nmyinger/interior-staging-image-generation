@@ -121,6 +121,26 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
         title="Reference (style)"
       />
 
+      {/* Handle labels — positioned to match handle percentages */}
+      <span
+        className="absolute left-5 text-[9px] text-stone-400 pointer-events-none select-none -translate-y-1/2"
+        style={{ top: "30%" }}
+      >
+        base
+      </span>
+      <span
+        className="absolute left-5 text-[9px] text-acacia-400 pointer-events-none select-none -translate-y-1/2"
+        style={{ top: "60%" }}
+      >
+        ref
+      </span>
+      <span
+        className="absolute right-5 text-[9px] text-sage-500 pointer-events-none select-none -translate-y-1/2"
+        style={{ top: "50%" }}
+      >
+        out
+      </span>
+
       <div className="p-3 space-y-2">
         {!isBaseConnected && (
           <div className="flex items-center gap-1.5 text-[10px] text-stone-400 py-0.5">

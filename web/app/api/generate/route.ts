@@ -57,19 +57,38 @@ export async function POST(req: NextRequest) {
   }
 
   const baseNodeRows = await sql`
-    SELECT data FROM canvas_nodes
-    WHERE id = ${baseEdges[0].source as string} AND session_id = ${sessionId} AND type = 'photo'
+    SELECT type, data FROM canvas_nodes
+    WHERE id = ${baseEdges[0].source as string} AND session_id = ${sessionId}
   `;
   if (!baseNodeRows.length) {
-    return NextResponse.json({ error: "Source photo node not found" }, { status: 404 });
+    return NextResponse.json({ error: "Base node not found" }, { status: 404 });
   }
-  const baseFilename = (baseNodeRows[0].data as { filename: string }).filename;
 
-  const photoRows = await sql`SELECT image_b64, mime_type FROM photos WHERE filename = ${baseFilename}`;
-  if (!photoRows.length) {
-    return NextResponse.json({ error: `Photo asset not found: ${baseFilename}` }, { status: 404 });
+  const baseNode = baseNodeRows[0] as { type: string; data: Record<string, unknown> };
+  let baseB64: string;
+  let baseMime: string;
+
+  if (baseNode.type === "photo") {
+    const baseFilename = (baseNode.data as { filename: string }).filename;
+    const photoRows = await sql`SELECT image_b64, mime_type FROM photos WHERE filename = ${baseFilename}`;
+    if (!photoRows.length) {
+      return NextResponse.json({ error: `Photo asset not found: ${baseFilename}` }, { status: 404 });
+    }
+    baseB64 = photoRows[0].image_b64 as string;
+    baseMime = photoRows[0].mime_type as string;
+  } else if (baseNode.type === "generation") {
+    const outputB64 = (baseNode.data as { outputB64?: string }).outputB64;
+    if (!outputB64) {
+      return NextResponse.json(
+        { error: "Connected generation node has no output yet — generate it first" },
+        { status: 400 }
+      );
+    }
+    baseB64 = outputB64;
+    baseMime = "image/jpeg";
+  } else {
+    return NextResponse.json({ error: "Base node must be a photo or generation node" }, { status: 400 });
   }
-  const { image_b64: baseB64, mime_type: baseMime } = photoRows[0];
 
   // Resolve optional reference images from ref edges
   const refEdges = await sql`

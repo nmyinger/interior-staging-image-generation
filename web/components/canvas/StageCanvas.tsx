@@ -6,6 +6,7 @@ import {
   addEdge,
   Background,
   MiniMap,
+  Panel,
   useNodesState,
   useEdgesState,
   type Connection,
@@ -242,6 +243,14 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
     onEdgesChange(changes);
   }, [onEdgesChange, snapshot]);
 
+  const isValidConnection = useCallback((connection: Connection | Edge): boolean => {
+    if (!connection.source || connection.source === connection.target) return false;
+    return (
+      ["photo", "output"].includes(connection.sourceHandle ?? "") &&
+      ["base", "ref"].includes(connection.targetHandle ?? "")
+    );
+  }, []);
+
   const onConnect = useCallback(
     (connection: Connection) => {
       snapshot();
@@ -416,6 +425,7 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
           onNodesChange={handleNodesChange}
           onEdgesChange={handleEdgesChange}
           onConnect={onConnect}
+          isValidConnection={isValidConnection}
           onNodeDragStart={snapshot}
           onSelectionChange={({ nodes: sel }) => setSelectedNodeId(sel[0]?.id ?? null)}
           nodeTypes={nodeTypes}
@@ -433,6 +443,18 @@ export function StageCanvas({ sessionId }: { sessionId: string }) {
         >
           <Background gap={20} color="var(--color-stone-200)" />
           <MiniMap nodeColor={miniMapNodeColor} className="!rounded-lg" />
+          <Panel position="bottom-left">
+            <div className="flex flex-col gap-1 bg-white/90 backdrop-blur-sm rounded-lg px-2 py-1.5 border border-stone-200 shadow-sm">
+              <div className="flex items-center gap-2 text-[10px] text-stone-500">
+                <div className="w-4 shrink-0 border-t-2 border-stone-400" />
+                <span>base</span>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-stone-500">
+                <div className="w-4 shrink-0 border-t-2 border-dashed border-acacia-400" />
+                <span>ref</span>
+              </div>
+            </div>
+          </Panel>
           <MenuBar
             onUpload={() => fileInputRef.current?.click()}
             onAddNode={handleAddGenerationNode}
