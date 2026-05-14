@@ -38,4 +38,4 @@ Python CLI that stages all photos in 3 cached steps:
 
 See `web/CLAUDE.md` for full details.
 
-Run: `cd web && npm run dev` (requires `.env.local` — see `web/CLAUDE.md`).
+Run: `cd web && npm run dev` (requires `.env.local` — pull via `vercel env pull .env.local --yes` after `vercel link`; see `web/CLAUDE.md`).

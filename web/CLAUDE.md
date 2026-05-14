@@ -16,8 +16,18 @@
 | AI | `@google/genai` | ^2 |
 | Styles | Tailwind CSS v4 + shadcn | — |
 | Image resize | sharp | ^0.33 |
+| Blob storage | @vercel/blob | ^1 |
 
 ## Environment Variables (`.env.local`)
+
+**Do not hand-edit `.env.local`.** The project is linked to Vercel — pull all vars with:
+
+```bash
+vercel link --project interior-staging-image-generation --scope nmyingers-projects
+vercel env pull .env.local --yes
+```
+
+Current variables (all provisioned on Vercel):
 
 ```
 DATABASE_URL=              # Neon connection string
@@ -26,10 +36,10 @@ GOOGLE_CLIENT_ID=          # Google OAuth app
 GOOGLE_CLIENT_SECRET=
 NEXTAUTH_SECRET=
 NEXTAUTH_URL=              # e.g. http://localhost:3000
-BLOB_READ_WRITE_TOKEN=     # Vercel Blob — provision via Vercel dashboard or CLI
+BLOB_READ_WRITE_TOKEN=     # Vercel Blob store: staging-images (store_9KSzqPHJUSdt6BoE)
 ```
 
-`BLOB_READ_WRITE_TOKEN` enables Vercel Blob storage for photos and generation outputs. Without it the app falls back to storing base64 in Postgres (fine for local dev, not for production).
+`BLOB_READ_WRITE_TOKEN` is active in all environments (Production, Preview, Development). Without it the app falls back to base64-in-Postgres — acceptable only for isolated local dev with no Vercel link.
 
 ## Database Schema (`lib/db.ts`)
 
@@ -73,14 +83,14 @@ session_invites     id, session_id → sessions, email, role ('viewer'|'editor')
 | `/api/canvas` | GET | resolveAccess | Load canvas (public sessions allowed; password cookie checked) |
 | `/api/canvas` | POST | required + write | Save full canvas state (debounced); respects canWrite from resolveAccess |
 | `/api/generate` | POST | required + write | Run Gemini image generation for a node |
-| `/api/photos` | GET | none | List photos (filename, room_type, zone, default_prompt) |
+| `/api/photos` | GET | required | List photos for the authenticated user (filename, room_type, zone, default_prompt) |
 | `/api/photos` | POST | required | Upload a new photo (max 10 MB base64; idempotent by filename) |
 | `/api/photos/[filename]` | GET | required | Serve photo as resized image (`?w=N`, max 1200 px) |
 | `/api/setup` | GET | optional secret | One-time DB seeding: pipeline output → DB (uses `SETUP_SECRET` header if set) |
 | `/api/history/[nodeId]` | GET | resolveAccess | Fetch generation history for a node (newest first) |
 | `/api/history/[nodeId]/restore` | POST | required + write | Restore a history entry as the node's current output (swaps current → history) |
 
-**`/api/canvas` POST** is a full-replace: upserts all current nodes (JSONB merge preserves `outputB64`), deletes missing ones, replaces all edges. Called after a 500 ms debounce on any canvas change.
+**`/api/canvas` POST** is a full-replace: upserts all current nodes (JSONB merge preserves `outputUrl` and `outputB64`), deletes missing ones, replaces all edges. Called after a 500 ms debounce on any canvas change.
 
 **`/api/generate` POST** resolves the base photo and any ref images from the DB server-side (never trusts client). Body: `{ nodeId, prompt, model? }`. Limits: prompt max 4096 chars, max 4 ref images. Previous output (`outputUrl` or `outputB64`) is pushed to `generation_history` before overwriting. If `BLOB_READ_WRITE_TOKEN` is set, uploads the Gemini output to Vercel Blob and stores the URL; otherwise stores base64.
 
@@ -144,7 +154,7 @@ Generation uses `responseModalities: ["IMAGE"]`. Has 1 automatic retry on empty 
 - Generation outputs: `gen/{nodeId}/{timestamp}.jpg`
 - Setup-seeded pipeline photos: `photos/setup/{filename}`
 
-When blob is not configured, all routes fall back to base64-in-DB (existing behavior). Production **must** have `BLOB_READ_WRITE_TOKEN` set — base64 storage does not scale.
+When blob is not configured, all routes fall back to base64-in-DB. `BLOB_READ_WRITE_TOKEN` is provisioned and active in all environments — blob is the default path in production and local dev.
 
 ## Access Control (`lib/access.ts`)
 
@@ -209,4 +219,12 @@ cd web
 npm run dev    # development server
 npm run build  # production build
 npm run lint   # eslint
+```
+
+**First-time local setup:**
+```bash
+cd web
+vercel link --project interior-staging-image-generation --scope nmyingers-projects
+vercel env pull .env.local --yes
+npm run dev
 ```
