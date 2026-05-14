@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql, genId } from "@/lib/db";
+import { z } from "zod";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function userId(session: any) {
@@ -24,8 +25,16 @@ export async function POST(
   const { id } = await params;
   if (!(await verifyOwner(id, uid))) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { email, role } = await req.json() as { email: string; role?: string };
-  if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
+  const inviteSchema = z.object({
+    email: z.string().email(),
+    role: z.enum(["viewer", "editor"]).optional(),
+  });
+
+  const parsed = inviteSchema.safeParse(await req.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
+  }
+  const { email, role } = parsed.data;
   const normalizedEmail = email.toLowerCase().trim();
   const inviteRole = role === "editor" ? "editor" : "viewer";
 

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { hashPassword } from "@/lib/access";
+import { z } from "zod";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function userId(session: any) {
@@ -49,16 +50,19 @@ export async function PATCH(
   const ownerRows = await sql`SELECT 1 FROM sessions WHERE id = ${id} AND owner_user_id = ${uid}`;
   if (!ownerRows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const body = await req.json() as {
-    linkAccess?: "private" | "view" | "edit";
-    password?: string;
-    removePassword?: boolean;
-  };
+  const shareSchema = z.object({
+    linkAccess: z.enum(["private", "view", "edit"]).optional(),
+    password: z.string().optional(),
+    removePassword: z.boolean().optional(),
+  });
+
+  const parsed = shareSchema.safeParse(await req.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
+  }
+  const body = parsed.data;
 
   if (body.linkAccess !== undefined) {
-    if (!["private", "view", "edit"].includes(body.linkAccess)) {
-      return NextResponse.json({ error: "Invalid linkAccess" }, { status: 400 });
-    }
     await sql`UPDATE sessions SET link_access = ${body.linkAccess} WHERE id = ${id}`;
   }
 

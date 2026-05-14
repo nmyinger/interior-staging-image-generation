@@ -6,6 +6,8 @@ import { sql, genId } from "@/lib/db";
 import { ALLOWED_MODEL_IDS, DEFAULT_MODEL_ID, type ModelId } from "@/lib/models";
 import { resolveAccess } from "@/lib/access";
 import { uploadToBlob, isBlobConfigured } from "@/lib/storage";
+import { canGenerate, recordGeneration, getSubscription } from "@/lib/billing";
+import { z } from "zod";
 
 const PROMPT_MAX_CHARS = 4096;
 const MAX_REF_IMAGES = 4;
@@ -21,17 +23,28 @@ export async function POST(req: NextRequest) {
   const { uid, email } = getUidEmail(authSession);
   if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { nodeId, prompt, model: requestedModel } = await req.json() as { nodeId: string; prompt: string; model?: string };
+  const generateSchema = z.object({
+    nodeId: z.string(),
+    prompt: z.string().max(PROMPT_MAX_CHARS),
+    model: z.string().optional(),
+  });
+
+  const parsed = generateSchema.safeParse(await req.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
+  }
+  const { nodeId, prompt, model: requestedModel } = parsed.data;
   const model = ALLOWED_MODEL_IDS.includes(requestedModel as ModelId)
     ? (requestedModel as string)
     : DEFAULT_MODEL_ID;
 
-  if (!nodeId || !prompt) {
-    return NextResponse.json({ error: "nodeId and prompt are required" }, { status: 400 });
-  }
-
-  if (prompt.length > PROMPT_MAX_CHARS) {
-    return NextResponse.json({ error: `Prompt exceeds ${PROMPT_MAX_CHARS} character limit` }, { status: 400 });
+  // Quota check — must happen before any expensive work
+  const quota = await canGenerate(uid);
+  if (!quota.allowed) {
+    return NextResponse.json(
+      { error: "quota_exceeded", reason: quota.reason, tier: quota.tier },
+      { status: 402 }
+    );
   }
 
   // Resolve session for this node
@@ -175,6 +188,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Look up org for billing record (best-effort — falls back to user-scoped ID)
+  let orgId: string | null = null;
+  try {
+    const sub = await getSubscription(uid);
+    orgId = (sub?.org_id as string) ?? null;
+  } catch {
+    /* billing tables not present yet — non-fatal */
+  }
+
+  // Determine billing period start (first day of current UTC month)
+  const now = new Date();
+  const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
   try {
     for (let attempt = 0; attempt < 2; attempt++) {
       const response = await ai.models.generateContent({
@@ -229,6 +255,17 @@ export async function POST(req: NextRequest) {
             `;
             outputImageUrl = `data:${outputMime};base64,${outputB64}`;
           }
+
+          // Record usage event (best-effort — non-blocking)
+          recordGeneration({
+            orgId,
+            userId: uid,
+            model,
+            refId: nodeId,
+            periodStart,
+          }).catch((err) =>
+            console.warn("[generate] recordGeneration failed", err)
+          );
 
           return NextResponse.json({ imageDataUrl: outputImageUrl });
         }

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql, genId } from "@/lib/db";
 import { resolveAccess } from "@/lib/access";
+import { z } from "zod";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getUidEmail(session: any) {
@@ -19,8 +20,16 @@ export async function POST(
   if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { nodeId } = await params;
-  const { historyId } = await req.json() as { historyId: string };
-  if (!historyId) return NextResponse.json({ error: "historyId required" }, { status: 400 });
+
+  const restoreSchema = z.object({
+    historyId: z.string(),
+  });
+
+  const parsed = restoreSchema.safeParse(await req.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
+  }
+  const { historyId } = parsed.data;
 
   const nodeRows = await sql`
     SELECT session_id, data->>'outputUrl' AS current_url, data->>'outputB64' AS current_b64

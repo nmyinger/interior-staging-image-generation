@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql } from "@/lib/db";
 import { uploadToBlob, isBlobConfigured } from "@/lib/storage";
+import { z } from "zod";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB base64-encoded
 
@@ -34,15 +35,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "File too large (max 10 MB)" }, { status: 413 });
   }
 
-  const { filename, mimeType, b64 } = await req.json() as {
-    filename: string;
-    mimeType: string;
-    b64: string;
-  };
+  const photoUploadSchema = z.object({
+    filename: z.string(),
+    mimeType: z.string(),
+    b64: z.string(),
+  });
 
-  if (!filename || !mimeType || !b64) {
-    return NextResponse.json({ error: "filename, mimeType, and b64 are required" }, { status: 400 });
+  const parsed = photoUploadSchema.safeParse(await req.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
   }
+  const { filename, mimeType, b64 } = parsed.data;
 
   if (b64.length > MAX_UPLOAD_BYTES) {
     return NextResponse.json({ error: "File too large (max 10 MB)" }, { status: 413 });

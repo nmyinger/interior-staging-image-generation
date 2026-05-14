@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { verifyPassword, createPasswordCookie, passwordCookieName } from "@/lib/access";
+import { z } from "zod";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { password } = await req.json() as { password: string };
-  if (!password) return NextResponse.json({ error: "password required" }, { status: 400 });
+
+  const verifyPasswordSchema = z.object({
+    password: z.string().min(1),
+  });
+
+  const parsed = verifyPasswordSchema.safeParse(await req.json());
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
+  }
+  const { password } = parsed.data;
 
   const rows = await sql`SELECT share_password_hash FROM sessions WHERE id = ${id}`;
   if (!rows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
