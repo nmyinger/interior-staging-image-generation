@@ -19,7 +19,6 @@ export async function GET(
 
   const { nodeId } = await params;
 
-  // Look up the session for this node
   const nodeRows = await sql`SELECT session_id FROM canvas_nodes WHERE id = ${nodeId}`;
   if (!nodeRows.length) return NextResponse.json({ history: [] });
 
@@ -36,7 +35,7 @@ export async function GET(
   }
 
   const rows = await sql`
-    SELECT id, output_b64, created_at
+    SELECT id, output_url, output_b64, created_at
     FROM generation_history
     WHERE node_id = ${nodeId}
     ORDER BY created_at DESC
@@ -44,7 +43,8 @@ export async function GET(
 
   const history = rows.map(r => ({
     id: r.id as string,
-    outputB64: r.output_b64 as string,
+    outputUrl: (r.output_url as string | null) ?? undefined,
+    outputB64: (r.output_b64 as string | null) || undefined,
     createdAt: (r.created_at as Date).toISOString(),
   }));
 

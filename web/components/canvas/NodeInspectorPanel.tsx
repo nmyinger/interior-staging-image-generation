@@ -18,7 +18,8 @@ import type { GenerationNodeData, PhotoNodeData } from "@/types/nodes";
 
 interface HistoryEntry {
   id: string;
-  outputB64: string;
+  outputUrl?: string;
+  outputB64?: string;
   createdAt: string;
 }
 
@@ -59,11 +60,17 @@ export function NodeInspectorPanel({
       .catch(() => setHistory([]));
   }, [selectedNodeId, outputB64]);
 
+  function historyEntryImageUrl(entry: HistoryEntry): string | undefined {
+    if (entry.outputUrl) return entry.outputUrl;
+    if (entry.outputB64) return `data:image/jpeg;base64,${entry.outputB64}`;
+    return undefined;
+  }
+
   const displayImageUrl =
     historyStep === 0
       ? genData?.outputImageUrl
       : history[historyStep - 1]
-      ? `data:image/jpeg;base64,${history[historyStep - 1].outputB64}`
+      ? historyEntryImageUrl(history[historyStep - 1])
       : genData?.outputImageUrl;
 
   const handleDelete = useCallback(() => {
@@ -83,12 +90,12 @@ export function NodeInspectorPanel({
   const handleRestore = useCallback(async () => {
     const entry = history[historyStep - 1];
     if (!entry) return;
-    const newDataUrl = `data:image/jpeg;base64,${entry.outputB64}`;
-    updateNodeData(selectedNodeId, {
-      outputB64: entry.outputB64,
-      outputImageUrl: newDataUrl,
-      status: "done",
-    });
+    const restoredImageUrl = historyEntryImageUrl(entry);
+    if (entry.outputUrl) {
+      updateNodeData(selectedNodeId, { outputUrl: entry.outputUrl, outputImageUrl: entry.outputUrl, status: "done" });
+    } else if (entry.outputB64) {
+      updateNodeData(selectedNodeId, { outputB64: entry.outputB64, outputImageUrl: restoredImageUrl, status: "done" });
+    }
     await fetch(`/api/history/${selectedNodeId}/restore`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

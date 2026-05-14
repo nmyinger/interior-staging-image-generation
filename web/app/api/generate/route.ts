@@ -5,6 +5,10 @@ import { GoogleGenAI } from "@google/genai";
 import { sql, genId } from "@/lib/db";
 import { ALLOWED_MODEL_IDS, DEFAULT_MODEL_ID, type ModelId } from "@/lib/models";
 import { resolveAccess } from "@/lib/access";
+import { uploadToBlob, isBlobConfigured } from "@/lib/storage";
+
+const PROMPT_MAX_CHARS = 4096;
+const MAX_REF_IMAGES = 4;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getUidEmail(session: any) {
@@ -26,6 +30,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "nodeId and prompt are required" }, { status: 400 });
   }
 
+  if (prompt.length > PROMPT_MAX_CHARS) {
+    return NextResponse.json({ error: `Prompt exceeds ${PROMPT_MAX_CHARS} character limit` }, { status: 400 });
+  }
+
   // Resolve session for this node
   const nodeRows = await sql`
     SELECT session_id FROM canvas_nodes WHERE id = ${nodeId} AND type = 'generation'
@@ -40,10 +48,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Read current outputB64 before generation so we can push it to history on success
+  // Read current output before generation so we can push it to history on success
   const nodeDataRows = await sql`
-    SELECT data->>'outputB64' AS output_b64 FROM canvas_nodes WHERE id = ${nodeId}
+    SELECT data->>'outputUrl' AS output_url, data->>'outputB64' AS output_b64
+    FROM canvas_nodes WHERE id = ${nodeId}
   `;
+  const previousOutputUrl = (nodeDataRows[0]?.output_url as string | null) ?? null;
   const previousOutputB64 = (nodeDataRows[0]?.output_b64 as string | null) ?? null;
 
   // Resolve base photo from connected edge (server-side, not trusted from client)
@@ -72,22 +82,47 @@ export async function POST(req: NextRequest) {
 
   if (baseNode.type === "photo") {
     const baseFilename = (baseNode.data as { filename: string }).filename;
-    const photoRows = await sql`SELECT image_b64, mime_type FROM photos WHERE filename = ${baseFilename}`;
+    const photoRows = await sql`SELECT image_url, image_b64, mime_type FROM photos WHERE filename = ${baseFilename}`;
     if (!photoRows.length) {
       return NextResponse.json({ error: `Photo asset not found: ${baseFilename}` }, { status: 404 });
     }
-    baseB64 = photoRows[0].image_b64 as string;
-    baseMime = photoRows[0].mime_type as string;
+    const { image_url, image_b64, mime_type } = photoRows[0] as {
+      image_url: string | null;
+      image_b64: string | null;
+      mime_type: string;
+    };
+    baseMime = mime_type;
+
+    if (image_url) {
+      // Fetch from blob URL
+      const fetchRes = await fetch(image_url);
+      if (!fetchRes.ok) return NextResponse.json({ error: "Failed to fetch base photo" }, { status: 500 });
+      const arrayBuf = await fetchRes.arrayBuffer();
+      baseB64 = Buffer.from(arrayBuf).toString("base64");
+    } else if (image_b64) {
+      baseB64 = image_b64;
+    } else {
+      return NextResponse.json({ error: `Photo asset has no image data: ${baseFilename}` }, { status: 404 });
+    }
   } else if (baseNode.type === "generation") {
+    const outputUrl = (baseNode.data as { outputUrl?: string }).outputUrl;
     const outputB64 = (baseNode.data as { outputB64?: string }).outputB64;
-    if (!outputB64) {
+
+    if (outputUrl) {
+      const fetchRes = await fetch(outputUrl);
+      if (!fetchRes.ok) return NextResponse.json({ error: "Failed to fetch base generation image" }, { status: 500 });
+      const arrayBuf = await fetchRes.arrayBuffer();
+      baseB64 = Buffer.from(arrayBuf).toString("base64");
+      baseMime = "image/jpeg";
+    } else if (outputB64) {
+      baseB64 = outputB64;
+      baseMime = "image/jpeg";
+    } else {
       return NextResponse.json(
         { error: "Connected generation node has no output yet — generate it first" },
         { status: 400 }
       );
     }
-    baseB64 = outputB64;
-    baseMime = "image/jpeg";
   } else {
     return NextResponse.json({ error: "Base node must be a photo or generation node" }, { status: 400 });
   }
@@ -105,18 +140,38 @@ export async function POST(req: NextRequest) {
 
   // Resolve optional reference images — single JOIN instead of N+1 loop
   const refRows = await sql`
-    SELECT n.type, n.data, p.image_b64, p.mime_type
+    SELECT n.type, n.data, p.image_url AS photo_url, p.image_b64, p.mime_type
     FROM canvas_edges e
     JOIN canvas_nodes n ON n.id = e.source AND n.session_id = ${sessionId}
     LEFT JOIN photos p ON n.type = 'photo' AND p.filename = (n.data->>'filename')
     WHERE e.session_id = ${sessionId} AND e.target = ${nodeId} AND e.target_handle = 'ref'
+    LIMIT ${MAX_REF_IMAGES}
   `;
+
   for (const ref of refRows) {
     const refData = ref.data as Record<string, unknown>;
-    if (ref.type === "photo" && ref.image_b64) {
-      parts.push({ inlineData: { mimeType: ref.mime_type as string, data: ref.image_b64 as string } });
-    } else if (ref.type === "generation" && refData.outputB64) {
-      parts.push({ inlineData: { mimeType: "image/jpeg", data: refData.outputB64 as string } });
+    if (ref.type === "photo") {
+      if (ref.photo_url) {
+        const fetchRes = await fetch(ref.photo_url as string);
+        if (fetchRes.ok) {
+          const buf = Buffer.from(await fetchRes.arrayBuffer()).toString("base64");
+          parts.push({ inlineData: { mimeType: ref.mime_type as string, data: buf } });
+        }
+      } else if (ref.image_b64) {
+        parts.push({ inlineData: { mimeType: ref.mime_type as string, data: ref.image_b64 as string } });
+      }
+    } else if (ref.type === "generation") {
+      const refOutputUrl = refData.outputUrl as string | undefined;
+      const refOutputB64 = refData.outputB64 as string | undefined;
+      if (refOutputUrl) {
+        const fetchRes = await fetch(refOutputUrl);
+        if (fetchRes.ok) {
+          const buf = Buffer.from(await fetchRes.arrayBuffer()).toString("base64");
+          parts.push({ inlineData: { mimeType: "image/jpeg", data: buf } });
+        }
+      } else if (refOutputB64) {
+        parts.push({ inlineData: { mimeType: "image/jpeg", data: refOutputB64 } });
+      }
     }
   }
 
@@ -139,19 +194,43 @@ export async function POST(req: NextRequest) {
           const outputB64 = part.inlineData.data;
           const outputMime = part.inlineData.mimeType ?? "image/jpeg";
 
-          if (previousOutputB64) {
+          // Push the previous output to history before overwriting
+          if (previousOutputUrl || previousOutputB64) {
             await sql`
-              INSERT INTO generation_history (id, node_id, session_id, output_b64, created_at)
-              VALUES (${genId()}, ${nodeId}, ${sessionId}, ${previousOutputB64}, NOW())
+              INSERT INTO generation_history (id, node_id, session_id, output_url, output_b64, created_at)
+              VALUES (${genId()}, ${nodeId}, ${sessionId}, ${previousOutputUrl ?? null}, ${previousOutputB64 ?? ''}, NOW())
             `;
           }
-          await sql`
-            UPDATE canvas_nodes
-            SET data = data || jsonb_build_object('outputB64', ${outputB64}::text, 'status', 'done', 'prompt', ${prompt}::text)
-            WHERE id = ${nodeId} AND session_id = ${sessionId}
-          `;
 
-          return NextResponse.json({ imageDataUrl: `data:${outputMime};base64,${outputB64}` });
+          // Upload new output to blob if configured, else fall back to inline base64
+          let outputImageUrl: string;
+          if (isBlobConfigured()) {
+            const blobKey = `gen/${nodeId}/${Date.now()}.jpg`;
+            const blobUrl = await uploadToBlob(blobKey, outputB64, outputMime);
+            await sql`
+              UPDATE canvas_nodes
+              SET data = data || jsonb_build_object(
+                'outputUrl', ${blobUrl}::text,
+                'status', 'done',
+                'prompt', ${prompt}::text
+              )
+              WHERE id = ${nodeId} AND session_id = ${sessionId}
+            `;
+            outputImageUrl = blobUrl;
+          } else {
+            await sql`
+              UPDATE canvas_nodes
+              SET data = data || jsonb_build_object(
+                'outputB64', ${outputB64}::text,
+                'status', 'done',
+                'prompt', ${prompt}::text
+              )
+              WHERE id = ${nodeId} AND session_id = ${sessionId}
+            `;
+            outputImageUrl = `data:${outputMime};base64,${outputB64}`;
+          }
+
+          return NextResponse.json({ imageDataUrl: outputImageUrl });
         }
       }
     }

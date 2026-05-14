@@ -22,14 +22,15 @@ export async function POST(
   const { historyId } = await req.json() as { historyId: string };
   if (!historyId) return NextResponse.json({ error: "historyId required" }, { status: 400 });
 
-  // Resolve node + session
   const nodeRows = await sql`
-    SELECT session_id, data->>'outputB64' AS current_b64 FROM canvas_nodes WHERE id = ${nodeId}
+    SELECT session_id, data->>'outputUrl' AS current_url, data->>'outputB64' AS current_b64
+    FROM canvas_nodes WHERE id = ${nodeId}
   `;
   if (!nodeRows.length) return NextResponse.json({ error: "Node not found" }, { status: 404 });
 
-  const { session_id: sessionId, current_b64: currentB64 } = nodeRows[0] as {
+  const { session_id: sessionId, current_url: currentUrl, current_b64: currentB64 } = nodeRows[0] as {
     session_id: string;
+    current_url: string | null;
     current_b64: string | null;
   };
 
@@ -37,27 +38,48 @@ export async function POST(
   if (!access.canWrite) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const histRows = await sql`
-    SELECT id, output_b64 FROM generation_history
+    SELECT id, output_url, output_b64 FROM generation_history
     WHERE id = ${historyId} AND node_id = ${nodeId}
   `;
   if (!histRows.length) return NextResponse.json({ error: "History entry not found" }, { status: 404 });
 
-  const historyOutputB64 = histRows[0].output_b64 as string;
+  const { output_url: histOutputUrl, output_b64: histOutputB64 } = histRows[0] as {
+    output_url: string | null;
+    output_b64: string | null;
+  };
 
-  if (currentB64 && currentB64 !== historyOutputB64) {
+  const histHasContent = !!(histOutputUrl || histOutputB64);
+  const currentHasContent = !!(currentUrl || currentB64);
+  const isSame = (currentUrl && currentUrl === histOutputUrl) || (currentB64 && currentB64 === histOutputB64);
+
+  if (currentHasContent && !isSame) {
     await sql`
-      INSERT INTO generation_history (id, node_id, session_id, output_b64, created_at)
-      VALUES (${genId()}, ${nodeId}, ${sessionId}, ${currentB64}, NOW())
+      INSERT INTO generation_history (id, node_id, session_id, output_url, output_b64, created_at)
+      VALUES (${genId()}, ${nodeId}, ${sessionId}, ${currentUrl ?? null}, ${currentB64 ?? ''}, NOW())
     `;
   }
 
   await sql`DELETE FROM generation_history WHERE id = ${historyId}`;
 
-  await sql`
-    UPDATE canvas_nodes
-    SET data = data || jsonb_build_object('outputB64', ${historyOutputB64}::text, 'status', 'done')
-    WHERE id = ${nodeId}
-  `;
+  if (histOutputUrl) {
+    await sql`
+      UPDATE canvas_nodes
+      SET data = data || jsonb_build_object('outputUrl', ${histOutputUrl}::text, 'status', 'done')
+      WHERE id = ${nodeId}
+    `;
+    if (!histHasContent) await sql`
+      UPDATE canvas_nodes SET data = data - 'outputB64' WHERE id = ${nodeId}
+    `;
+  } else if (histOutputB64) {
+    await sql`
+      UPDATE canvas_nodes
+      SET data = data || jsonb_build_object('outputB64', ${histOutputB64}::text, 'status', 'done')
+      WHERE id = ${nodeId}
+    `;
+  }
 
-  return NextResponse.json({ outputB64: historyOutputB64 });
+  return NextResponse.json({
+    outputUrl: histOutputUrl ?? undefined,
+    outputB64: histOutputB64 ?? undefined,
+  });
 }

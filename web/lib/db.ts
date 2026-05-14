@@ -45,9 +45,6 @@ export async function migrate() {
   `;
 
   if (!hasCanvas.length) {
-    await sql`DROP TABLE IF EXISTS edges`;
-    await sql`DROP TABLE IF EXISTS generations`;
-
     await sql`
       CREATE TABLE canvas_nodes (
         id         TEXT PRIMARY KEY,
@@ -80,7 +77,7 @@ export async function migrate() {
       id         TEXT PRIMARY KEY,
       node_id    TEXT NOT NULL REFERENCES canvas_nodes(id) ON DELETE CASCADE,
       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-      output_b64 TEXT NOT NULL,
+      output_b64 TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
@@ -102,4 +99,16 @@ export async function migrate() {
   `;
   await sql`CREATE INDEX IF NOT EXISTS session_invites_session_idx ON session_invites(session_id)`;
   await sql`CREATE INDEX IF NOT EXISTS session_invites_email_idx ON session_invites(email)`;
+
+  // Blob storage: user-scoped photos + URL columns
+  await sql`ALTER TABLE photos ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT ''`;
+  await sql`ALTER TABLE photos ADD COLUMN IF NOT EXISTS image_url TEXT`;
+  await sql`ALTER TABLE photos ALTER COLUMN image_b64 DROP NOT NULL`;
+  await sql`ALTER TABLE photos ALTER COLUMN image_b64 SET DEFAULT ''`;
+  await sql`CREATE INDEX IF NOT EXISTS photos_user_idx ON photos(user_id)`;
+
+  // generation_history: add output_url for blob-stored outputs
+  await sql`ALTER TABLE generation_history ADD COLUMN IF NOT EXISTS output_url TEXT`;
+  await sql`ALTER TABLE generation_history ALTER COLUMN output_b64 DROP NOT NULL`;
+  await sql`ALTER TABLE generation_history ALTER COLUMN output_b64 SET DEFAULT ''`;
 }

@@ -1,16 +1,19 @@
 /**
  * GET /api/setup
  * Runs migrations and seeds photos from ../Source Photos/ into the DB.
- * Idempotent — safe to call multiple times. Skip photos already in DB.
+ * Idempotent — safe to call multiple times. Skips photos already in DB.
+ * Requires SETUP_SECRET header if SETUP_SECRET env var is set.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { sql, migrate } from "@/lib/db";
+import { uploadToBlob, isBlobConfigured } from "@/lib/storage";
 import { readFile, readdir } from "fs/promises";
 import path from "path";
 
 const PHOTOS_DIR = path.resolve(process.cwd(), "../Source Photos");
 const CACHE_DIR = path.resolve(process.cwd(), "../.cache");
 const SKIP = new Set(["FLN_9405_1.jpg", "FLN_9411_1.jpg"]);
+const SETUP_USER_ID = "setup"; // sentinel for pipeline-seeded photos
 
 const ROOM_TO_ZONE: Record<string, string> = {
   kitchen: "open_plan",
@@ -51,22 +54,33 @@ export async function GET(req: NextRequest) {
     )
   );
 
+  let photosSeeded = 0;
   await Promise.all(
-    photoBuffers.map(({ filename, bytes }) => {
-      const b64 = bytes.toString("base64");
+    photoBuffers.map(async ({ filename, bytes }) => {
       const ext = path.extname(filename).toLowerCase();
       const mime = ext === ".png" ? "image/png" : "image/jpeg";
       const roomType = analysis[filename]?.room_type ?? "unknown";
       const zone = ROOM_TO_ZONE[roomType] ?? "unknown";
       const defaultPrompt = photoManifests[filename] ?? "";
 
-      return sql`
-        INSERT INTO photos (filename, room_type, zone, default_prompt, image_b64, mime_type)
-        VALUES (${filename}, ${roomType}, ${zone}, ${defaultPrompt}, ${b64}, ${mime})
-        ON CONFLICT (filename) DO NOTHING
-      `;
+      if (isBlobConfigured()) {
+        const imageUrl = await uploadToBlob(`photos/${SETUP_USER_ID}/${filename}`, bytes, mime);
+        await sql`
+          INSERT INTO photos (filename, user_id, room_type, zone, default_prompt, image_url, mime_type)
+          VALUES (${filename}, ${SETUP_USER_ID}, ${roomType}, ${zone}, ${defaultPrompt}, ${imageUrl}, ${mime})
+          ON CONFLICT (filename) DO NOTHING
+        `;
+      } else {
+        const b64 = bytes.toString("base64");
+        await sql`
+          INSERT INTO photos (filename, user_id, room_type, zone, default_prompt, image_b64, mime_type)
+          VALUES (${filename}, ${SETUP_USER_ID}, ${roomType}, ${zone}, ${defaultPrompt}, ${b64}, ${mime})
+          ON CONFLICT (filename) DO NOTHING
+        `;
+      }
+      photosSeeded++;
     })
   );
 
-  return NextResponse.json({ ok: true, migrationsRun: true, photosSeeded: newFiles.length });
+  return NextResponse.json({ ok: true, migrationsRun: true, photosSeeded });
 }

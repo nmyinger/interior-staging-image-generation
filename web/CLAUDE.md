@@ -20,13 +20,16 @@
 ## Environment Variables (`.env.local`)
 
 ```
-DATABASE_URL=           # Neon connection string
-GEMINI_API_KEY=         # Google AI Studio key
-GOOGLE_CLIENT_ID=       # Google OAuth app
+DATABASE_URL=              # Neon connection string
+GEMINI_API_KEY=            # Google AI Studio key
+GOOGLE_CLIENT_ID=          # Google OAuth app
 GOOGLE_CLIENT_SECRET=
 NEXTAUTH_SECRET=
-NEXTAUTH_URL=           # e.g. http://localhost:3000
+NEXTAUTH_URL=              # e.g. http://localhost:3000
+BLOB_READ_WRITE_TOKEN=     # Vercel Blob — provision via Vercel dashboard or CLI
 ```
+
+`BLOB_READ_WRITE_TOKEN` enables Vercel Blob storage for photos and generation outputs. Without it the app falls back to storing base64 in Postgres (fine for local dev, not for production).
 
 ## Database Schema (`lib/db.ts`)
 
@@ -34,18 +37,28 @@ Schema is auto-migrated on first request via `migrate()`.
 
 ```
 users               id (Google sub), email, name, image
-photos              filename (PK), room_type, zone, default_prompt, image_b64, mime_type
-sessions            id, owner_user_id → users, name, created_at
+photos              filename (PK), user_id TEXT DEFAULT '',
+                    room_type, zone, default_prompt, mime_type,
+                    image_url TEXT NULL,   -- Vercel Blob URL (preferred)
+                    image_b64 TEXT NULL    -- legacy base64 fallback
+sessions            id, owner_user_id → users, name, created_at,
+                    link_access TEXT DEFAULT 'private',   -- 'private' | 'view' | 'edit'
+                    share_password_hash TEXT NULL          -- PBKDF2 hash; NULL = no password
 canvas_nodes        id, session_id → sessions, type, x, y, data (JSONB)
 canvas_edges        id, session_id, source, source_handle, target, target_handle
-generation_history  id, node_id → canvas_nodes, session_id → sessions, output_b64 TEXT, created_at
+generation_history  id, node_id → canvas_nodes, session_id → sessions,
+                    output_url TEXT NULL,   -- Vercel Blob URL (preferred)
+                    output_b64 TEXT NULL,   -- legacy base64 fallback
+                    created_at
+session_invites     id, session_id → sessions, email, role ('viewer'|'editor'), created_at
+                    UNIQUE (session_id, email)
 ```
 
 `canvas_nodes.data` schema by type:
 - `photo`: `{ filename: string }`
-- `generation`: `{ prompt, status ("idle"|"generating"|"done"|"error"), model?, outputB64? }`
+- `generation`: `{ prompt, status ("idle"|"generating"|"done"|"error"), model?, outputUrl?, outputB64? }`
 
-`outputB64` is persisted; `photoUrl` and `outputImageUrl` are derived at load time and never stored.
+`outputUrl` (blob) and `outputB64` (legacy) are both persisted via JSONB merge; `photoUrl` and `outputImageUrl` are derived at load time from whichever is present — never stored.
 
 ## API Routes
 
@@ -53,32 +66,39 @@ generation_history  id, node_id → canvas_nodes, session_id → sessions, outpu
 |---|---|---|---|
 | `/api/sessions` | GET, POST | required | List / create sessions |
 | `/api/sessions/[id]` | PATCH, DELETE | required | Rename / delete session |
-| `/api/canvas` | GET, POST | required | Load / save full canvas state (debounced) |
-| `/api/generate` | POST | required | Run Gemini image generation for a node |
-| `/api/photos` | GET, POST | none | List photos / upload new photo |
-| `/api/photos/[filename]` | GET | none | Serve photo as resized image (`?w=N`) |
-| `/api/setup` | GET | none | One-time DB seeding (pipeline output → DB) |
-| `/api/history/[nodeId]` | GET | required | Fetch generation history for a node (newest first) |
-| `/api/history/[nodeId]/restore` | POST | required | Restore a history entry as the node's current output (swaps current → history) |
+| `/api/sessions/[id]/share` | GET, PATCH | owner only | Read/update link access, password, invite list |
+| `/api/sessions/[id]/invites` | POST, DELETE | owner only | Add invite (or upsert role) / clear all invites |
+| `/api/sessions/[id]/invites/[email]` | DELETE | owner only | Remove a single email invite |
+| `/api/sessions/[id]/verify-password` | POST | none | Verify share password; sets httpOnly cookie on success |
+| `/api/canvas` | GET | resolveAccess | Load canvas (public sessions allowed; password cookie checked) |
+| `/api/canvas` | POST | required + write | Save full canvas state (debounced); respects canWrite from resolveAccess |
+| `/api/generate` | POST | required + write | Run Gemini image generation for a node |
+| `/api/photos` | GET | none | List photos (filename, room_type, zone, default_prompt) |
+| `/api/photos` | POST | required | Upload a new photo (max 10 MB base64; idempotent by filename) |
+| `/api/photos/[filename]` | GET | required | Serve photo as resized image (`?w=N`, max 1200 px) |
+| `/api/setup` | GET | optional secret | One-time DB seeding: pipeline output → DB (uses `SETUP_SECRET` header if set) |
+| `/api/history/[nodeId]` | GET | resolveAccess | Fetch generation history for a node (newest first) |
+| `/api/history/[nodeId]/restore` | POST | required + write | Restore a history entry as the node's current output (swaps current → history) |
 
-**`/api/canvas` POST** is a full-replace: upserts all current nodes, deletes missing ones, replaces all edges. Called after a 500 ms debounce on any canvas change.
+**`/api/canvas` POST** is a full-replace: upserts all current nodes (JSONB merge preserves `outputB64`), deletes missing ones, replaces all edges. Called after a 500 ms debounce on any canvas change.
 
-**`/api/generate` POST** resolves the base photo and any ref images from the DB server-side (never trusts client). Body: `{ nodeId, prompt, model? }`.
+**`/api/generate` POST** resolves the base photo and any ref images from the DB server-side (never trusts client). Body: `{ nodeId, prompt, model? }`. Limits: prompt max 4096 chars, max 4 ref images. Previous output (`outputUrl` or `outputB64`) is pushed to `generation_history` before overwriting. If `BLOB_READ_WRITE_TOKEN` is set, uploads the Gemini output to Vercel Blob and stores the URL; otherwise stores base64.
 
 ## Canvas Architecture (`components/canvas/`)
 
 ```
 StageCanvas.tsx         Root canvas component — owns nodes/edges state, save, undo
+                        Props: sessionId, readOnly? (disables all writes + hides MenuBar)
 SourceNode.tsx          Photo node (type: "photo") — displays source image
 GenerationNode.tsx      Generation node (type: "generation") — prompt textarea + generate button (slim)
 DeletableEdge.tsx       Edge type with delete hover affordance
-MenuBar.tsx             Bottom-center toolbar: upload, add node, save status
+MenuBar.tsx             Bottom-center toolbar: upload, add node, save status (hidden in readOnly)
 NodeInspectorPanel.tsx  Right-side panel (ReactFlow Panel) — prompt, model picker, output history,
                         download, delete; shown for any selected node; key=selectedNodeId resets state
-SessionContext.ts       React context carrying sessionId down to nodes
+SessionContext.ts       React context: { sessionId: string; readOnly: boolean }
 ```
 
-**NodeInspectorPanel** mounts inside `<ReactFlow>` as a `<Panel position="top-right">` styled to span the full canvas height. Uses `key={selectedNodeId}` from the parent so all state resets when a different node is selected.
+**NodeInspectorPanel** mounts inside `<ReactFlow>` as a `<Panel position="top-right">` styled to span the full canvas height. Uses `key={selectedNodeId}` from the parent so all state resets when a different node is selected. Reads `readOnly` from `SessionContext` — hides model picker, Generate button, and Delete in read-only mode.
 
 ### Node Handles
 
@@ -102,9 +122,9 @@ Edge color: `base` edges → stone-400; `ref` edges → acacia-400 dashed.
 
 ## AI Models
 
-Defined in two places that **must stay in sync**:
-- `lib/models.ts` — `GENERATION_MODELS` array (used by `NodeInspectorPanel`)
-- `app/api/generate/route.ts` — `ALLOWED_MODEL_IDS` array
+Defined once in `lib/models.ts`:
+- `GENERATION_MODELS` array — consumed by `NodeInspectorPanel` for the model picker UI
+- `ALLOWED_MODEL_IDS` / `DEFAULT_MODEL_ID` — re-exported from the same file; `generate/route.ts` imports them (no separate list to keep in sync)
 
 Current models:
 | ID | Label | Notes |
@@ -115,6 +135,53 @@ Current models:
 
 Generation uses `responseModalities: ["IMAGE"]`. Has 1 automatic retry on empty candidates.
 
+## Image Storage (`lib/storage.ts`)
+
+`isBlobConfigured()` — returns true if `BLOB_READ_WRITE_TOKEN` is set.
+
+`uploadToBlob(key, data, contentType)` — uploads `Buffer` or base64 string to Vercel Blob with public access. Key conventions:
+- Photos: `photos/{userId}/{filename}`
+- Generation outputs: `gen/{nodeId}/{timestamp}.jpg`
+- Setup-seeded pipeline photos: `photos/setup/{filename}`
+
+When blob is not configured, all routes fall back to base64-in-DB (existing behavior). Production **must** have `BLOB_READ_WRITE_TOKEN` set — base64 storage does not scale.
+
+## Access Control (`lib/access.ts`)
+
+`resolveAccess(sessionId, uid, email)` — central function used by canvas, generate, and history routes.
+
+Returns `SessionAccessInfo`:
+- `role`: `"owner" | "editor" | "viewer" | "none"`
+- `canWrite`, `canRead` — derived booleans
+- `needsPassword` — true when access came via a public link AND a password is set
+- `passwordHash` — raw hash (needed to verify the password cookie server-side)
+
+Resolution order:
+1. Owner (`uid === owner_user_id`) — full access, password never required
+2. Email invite — matched against `session_invites`; role is `viewer` or `editor`
+3. `link_access = "view"` — viewer access; password check applies
+4. `link_access = "edit"` — editor if authenticated, viewer if not; password check applies
+5. `link_access = "private"` — `role: "none"`, no access
+
+**Password system** — PBKDF2-SHA256, 210 000 iterations (OWASP 2023).
+- `hashPassword(pw)` → `pbkdf2$iters$salt$hash`
+- `verifyPassword(pw, stored)` → constant-time compare
+- On success, `createPasswordCookie(sessionId, hash)` issues a stateless HMAC-SHA256 cookie tied to the session + hash (rotating the password auto-invalidates all cookies). Cookie name: `spw-{sessionId}`. 7-day TTL.
+- `verifyPasswordCookie(cookieValue, sessionId, hash)` — verified server-side in both the page render and API routes.
+
+## Session Sharing
+
+Sharing is owner-only. The ShareModal (`components/ShareModal.tsx`) drives all sharing UI from the session header.
+
+**Link access** (`sessions.link_access`):
+- `private` — only owner and invited people
+- `view` — anyone with the link can read
+- `edit` — authenticated users can write; unauthenticated users can only read
+
+**Email invites** (`session_invites`): owner adds individual emails with `viewer` or `editor` role. Invite lookup is by normalized email on every request — no registration required for the invitee.
+
+**Password gate**: when a public-link session has `share_password_hash` set, unauthenticated (or non-invited) visitors accessing `/session/[id]` are redirected to `/session/[id]/password` (`PasswordForm.tsx`). On correct entry, a `spw-{id}` cookie is set and they are redirected back.
+
 ## Auth
 
 Google OAuth via `next-auth`. `user.id` = Google `profile.sub`. Session exposed client-side via `useSession()`; server-side via `getServerSession(authOptions)`. Sign-in page is `/` (the `LoginGate` component). `lib/auth.ts` upserts user on every sign-in.
@@ -122,9 +189,10 @@ Google OAuth via `next-auth`. `user.id` = Google `profile.sub`. Session exposed 
 ## File Upload Flow
 
 1. Client reads file as base64 DataURL
-2. POST `/api/photos` with `{ filename, mimeType, b64 }` — idempotent (skips if filename exists)
-3. `canvas_nodes` row created in the debounced canvas save
-4. `/api/photos/[filename]?w=N` serves the photo resized via `sharp`
+2. POST `/api/photos` with `{ filename, mimeType, b64 }` — idempotent per `(user_id, filename)`
+3. Server uploads to Vercel Blob (`photos/{uid}/{filename}`) and stores URL; falls back to base64 if blob not configured
+4. `canvas_nodes` row created in the debounced canvas save
+5. `/api/photos/[filename]?w=N` — redirects to `{blobUrl}?width=N` (CDN-served); falls back to sharp resize for legacy base64 photos
 
 Drag-and-drop onto the canvas is supported (tracked with `dragCounter` ref to handle enter/leave quirks).
 

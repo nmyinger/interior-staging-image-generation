@@ -9,7 +9,8 @@ export interface GenerationNodeData {
   prompt: string;
   status: NodeStatus;
   model?: string;            // persisted — model ID used for generation
-  outputB64?: string;        // persisted in canvas_nodes.data
-  outputImageUrl?: string;   // derived from outputB64 at load time, not persisted
+  outputUrl?: string;        // persisted in canvas_nodes.data — blob URL (new)
+  outputB64?: string;        // persisted in canvas_nodes.data — base64 (legacy, kept for existing rows)
+  outputImageUrl?: string;   // derived at load time from outputUrl or outputB64; never persisted
   error?: string;            // transient UI state, not persisted
 }

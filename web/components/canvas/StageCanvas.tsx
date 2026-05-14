@@ -135,13 +135,16 @@ export function StageCanvas({ sessionId, readOnly }: { sessionId: string; readOn
           };
           return { id: n.id, type: "photo", position: { x: n.x, y: n.y }, data: data as unknown as Record<string, unknown> };
         } else {
+          const outputUrl = n.data.outputUrl as string | undefined;
           const outputB64 = n.data.outputB64 as string | undefined;
+          const outputImageUrl = outputUrl ?? (outputB64 ? `data:image/jpeg;base64,${outputB64}` : undefined);
           const data: GenerationNodeData = {
             prompt: (n.data.prompt as string) ?? "",
             status: n.data.status === "done" ? "done" : "idle",
             model: n.data.model as string | undefined,
+            outputUrl,
             outputB64,
-            outputImageUrl: outputB64 ? `data:image/jpeg;base64,${outputB64}` : undefined,
+            outputImageUrl,
           };
           return { id: n.id, type: "generation", position: { x: n.x, y: n.y }, data: data as unknown as Record<string, unknown> };
         }

@@ -52,11 +52,17 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Generation failed");
 
-      const dataUrl: string = json.imageDataUrl;
-      const b64 = dataUrl.replace(/^data:[^;]+;base64,/, "");
-      setOutputUrl(dataUrl);
+      const imageUrl: string = json.imageDataUrl;
+      // imageDataUrl is either a blob URL (https://...) or legacy data URL (data:...)
+      const isBlob = imageUrl.startsWith("https://");
+      setOutputUrl(imageUrl);
       setStatus("done");
-      updateNodeData(id, { outputB64: b64, outputImageUrl: dataUrl, status: "done", prompt: currentPrompt });
+      if (isBlob) {
+        updateNodeData(id, { outputUrl: imageUrl, outputImageUrl: imageUrl, status: "done", prompt: currentPrompt });
+      } else {
+        const b64 = imageUrl.replace(/^data:[^;]+;base64,/, "");
+        updateNodeData(id, { outputB64: b64, outputImageUrl: imageUrl, status: "done", prompt: currentPrompt });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
       setStatus("error");
