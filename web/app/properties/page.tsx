@@ -115,40 +115,44 @@ function PropertyCard({ property }: { property: PropertyRow }) {
       href={`/properties/${property.id}`}
       className="block bg-white rounded-xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all p-5"
     >
-      <div className="flex items-start gap-3 flex-wrap">
-        <h2 className="text-sm font-semibold text-stone-800">{property.name}</h2>
-        {property.mls && (
-          <span className="inline-flex items-center gap-1 text-[11px] text-acacia-500 bg-acacia-100 border border-acacia-200 rounded-full px-2 py-0.5 font-medium">
-            {property.mls}
-          </span>
+      <div className="flex items-center gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h2 className="text-sm font-semibold text-stone-800">{property.name}</h2>
+            {property.mls && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-acacia-500 bg-acacia-100 border border-acacia-200 rounded-full px-2 py-0.5 font-medium">
+                {property.mls}
+              </span>
+            )}
+          </div>
+
+          {property.address && (
+            <p className="flex items-center gap-1 text-xs text-stone-400 mt-1.5">
+              <MapPin size={11} className="shrink-0" />
+              {property.address}
+            </p>
+          )}
+
+          <div className="flex items-center gap-4 mt-2">
+            <span className="flex items-center gap-1 text-[11px] text-stone-400">
+              <ImageIcon size={11} />
+              {property.photo_count} photo{property.photo_count !== 1 ? "s" : ""}
+            </span>
+            <span className="text-[11px] text-stone-400">{date}</span>
+          </div>
+        </div>
+
+        {property.preview_urls?.length > 0 && (
+          <div className="flex gap-1.5 shrink-0">
+            {property.preview_urls.slice(0, 3).map((url, i) => (
+              <div key={i} className="w-16 h-11 rounded-lg overflow-hidden bg-stone-100 border border-stone-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="w-full h-full object-cover" />
+              </div>
+            ))}
+          </div>
         )}
       </div>
-
-      {property.address && (
-        <p className="flex items-center gap-1 text-xs text-stone-400 mt-1.5">
-          <MapPin size={11} className="shrink-0" />
-          {property.address}
-        </p>
-      )}
-
-      <div className="flex items-center gap-4 mt-2">
-        <span className="flex items-center gap-1 text-[11px] text-stone-400">
-          <ImageIcon size={11} />
-          {property.photo_count} photo{property.photo_count !== 1 ? "s" : ""}
-        </span>
-        <span className="text-[11px] text-stone-400">{date}</span>
-      </div>
-
-      {property.preview_urls?.length > 0 && (
-        <div className="flex gap-1.5 mt-3">
-          {property.preview_urls.slice(0, 3).map((url, i) => (
-            <div key={i} className="w-16 h-11 rounded-lg overflow-hidden bg-stone-100 border border-stone-200 shrink-0">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="w-full h-full object-cover" />
-            </div>
-          ))}
-        </div>
-      )}
     </Link>
   );
 }
