@@ -23,7 +23,7 @@ import { GenerationNode } from "./GenerationNode";
 import { DeletableEdge } from "./DeletableEdge";
 import { MenuBar } from "./MenuBar";
 import { NodeInspectorPanel } from "./NodeInspectorPanel";
-import { SessionContext } from "./SessionContext";
+import { CanvasContext } from "./CanvasContext";
 import type { PhotoNodeData, GenerationNodeData } from "@/types/nodes";
 
 const nodeTypes: NodeTypes = {
@@ -415,7 +415,7 @@ export function StageCanvas({ sessionId, readOnly }: { sessionId: string; readOn
   }
 
   return (
-    <SessionContext.Provider value={{ sessionId, readOnly: readOnly ?? false }}>
+    <CanvasContext.Provider value={{ sessionId, readOnly: readOnly ?? false }}>
       <div className="w-full h-full relative">
         <input
           ref={fileInputRef}
@@ -472,6 +472,6 @@ export function StageCanvas({ sessionId, readOnly }: { sessionId: string; readOn
           )}
         </ReactFlow>
       </div>
-    </SessionContext.Provider>
+    </CanvasContext.Provider>
   );
 }

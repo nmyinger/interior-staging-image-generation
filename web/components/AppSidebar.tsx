@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import {
-  LayoutDashboard,
   Building2,
   ShieldCheck,
   CreditCard,
@@ -18,11 +17,9 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ElementType;
-  exact?: boolean;
 }
 
 const WORKSPACE_NAV: NavItem[] = [
-  { href: "/sessions", label: "Sessions", icon: LayoutDashboard },
   { href: "/properties", label: "Properties", icon: Building2 },
 ];
 
@@ -35,9 +32,7 @@ const ACCOUNT_NAV: NavItem[] = [
 ];
 
 function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
-  const isActive = item.exact
-    ? pathname === item.href
-    : pathname === item.href || pathname.startsWith(item.href + "/");
+  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
 
   return (
     <Link

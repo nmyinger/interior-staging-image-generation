@@ -27,6 +27,8 @@ import {
   Check,
   Download,
   PencilLine,
+  Frame,
+  Plus,
 } from "lucide-react";
 
 const MLS_OPTIONS = [
@@ -105,7 +107,34 @@ export default function PropertyDetailPage() {
   // Photos state
   const [photos, setPhotos] = useState<PropertyPhoto[]>([]);
 
+  // Canvases state
+  const [canvases, setCanvases] = useState<{ id: string; name: string; created_at: string }[]>([]);
+  const [creatingCanvas, setCreatingCanvas] = useState(false);
+
   const initialized = useRef(false);
+
+  const loadCanvases = useCallback(async () => {
+    const res = await fetch(`/api/sessions?property_id=${propertyId}`);
+    if (res.ok) {
+      const data = await res.json();
+      setCanvases(data.sessions ?? []);
+    }
+  }, [propertyId]);
+
+  const createCanvas = useCallback(async () => {
+    setCreatingCanvas(true);
+    const res = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ property_id: propertyId }),
+    });
+    if (res.ok) {
+      const { id } = await res.json();
+      router.push(`/canvas/${id}`);
+    } else {
+      setCreatingCanvas(false);
+    }
+  }, [propertyId, router]);
 
   const loadProperty = useCallback(async () => {
     try {
@@ -142,8 +171,9 @@ export default function PropertyDetailPage() {
     if (!initialized.current) {
       initialized.current = true;
       loadProperty();
+      loadCanvases();
     }
-  }, [loadProperty]);
+  }, [loadProperty, loadCanvases]);
 
   // Name editing
   function startEditName() {
@@ -528,6 +558,69 @@ export default function PropertyDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Canvases section */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-stone-700">Canvases</h2>
+            <button
+              onClick={createCanvas}
+              disabled={creatingCanvas}
+              className="flex items-center gap-1.5 text-xs font-medium text-sage-700 hover:text-sage-900 bg-sage-50 hover:bg-sage-100 border border-sage-200 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              {creatingCanvas ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+              New canvas
+            </button>
+          </div>
+
+          {canvases.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-3 bg-white rounded-2xl border border-stone-200">
+              <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center">
+                <Frame size={18} strokeWidth={1.25} className="text-stone-400" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium text-stone-600">No canvases yet</p>
+                <p className="text-xs text-stone-400 mt-0.5">Create a canvas for interactive, photo-by-photo staging</p>
+              </div>
+              <button
+                onClick={createCanvas}
+                disabled={creatingCanvas}
+                className="flex items-center gap-1.5 text-sm font-medium text-white bg-sage-600 hover:bg-sage-700 rounded-lg px-4 py-2 transition-colors shadow-sm"
+              >
+                {creatingCanvas ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                New canvas
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {canvases.map((canvas) => (
+                <div
+                  key={canvas.id}
+                  className="bg-white rounded-xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all p-4 flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-sage-50 border border-sage-200 flex items-center justify-center shrink-0">
+                      <Frame size={14} className="text-sage-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-stone-800 truncate">{canvas.name}</p>
+                      <p className="text-[11px] text-stone-400">
+                        {new Date(canvas.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </p>
+                    </div>
+                  </div>
+                  <Link
+                    href={`/canvas/${canvas.id}`}
+                    className="shrink-0 text-xs font-medium text-sage-700 bg-sage-50 hover:bg-sage-100 border border-sage-200 rounded-lg px-3 py-1.5 transition-colors"
+                  >
+                    Open
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );

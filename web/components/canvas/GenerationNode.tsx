@@ -5,7 +5,7 @@ import { Handle, Position, useReactFlow, useStore, type NodeProps } from "@xyflo
 import { Loader2, Sparkles, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { SessionContext } from "./SessionContext";
+import { CanvasContext } from "./CanvasContext";
 import type { GenerationNodeData, NodeStatus } from "@/types/nodes";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
 import { StatusDot } from "@/components/ui/status-dot";
@@ -23,7 +23,7 @@ const HANDLE_REF_STYLE = { top: "60%" };
 
 export const GenerationNode = memo(function GenerationNode({ id, data, selected }: NodeProps) {
   const d = data as unknown as GenerationNodeData;
-  const { sessionId, readOnly } = useContext(SessionContext);
+  const { sessionId, readOnly } = useContext(CanvasContext);
   const { updateNodeData } = useReactFlow();
 
   // Reactive: re-renders when any edge connecting this node's base handle changes

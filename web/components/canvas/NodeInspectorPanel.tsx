@@ -13,7 +13,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { GENERATION_MODELS, DEFAULT_MODEL_ID } from "@/lib/models";
-import { SessionContext } from "./SessionContext";
+import { CanvasContext } from "./CanvasContext";
 import type { GenerationNodeData, PhotoNodeData } from "@/types/nodes";
 
 interface HistoryEntry {
@@ -32,7 +32,7 @@ export function NodeInspectorPanel({
 }) {
   const nodes = useNodes();
   const { updateNodeData, deleteElements } = useReactFlow();
-  const { readOnly } = useContext(SessionContext);
+  const { readOnly } = useContext(CanvasContext);
 
   const node = nodes.find((n) => n.id === selectedNodeId);
   const genData = node?.type === "generation"

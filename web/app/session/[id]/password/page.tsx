@@ -1,13 +1,6 @@
-import { migrate } from "@/lib/db";
-import { PasswordForm } from "./PasswordForm";
+import { redirect } from "next/navigation";
 
-export default async function PasswordPage({ params }: { params: Promise<{ id: string }> }) {
-  await migrate();
+export default async function LegacyPasswordPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-
-  return (
-    <main className="flex flex-col h-screen bg-stone-50 items-center justify-center">
-      <PasswordForm sessionId={id} />
-    </main>
-  );
+  redirect(`/canvas/${id}/password`);
 }
