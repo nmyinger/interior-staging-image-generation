@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Upload, Star, ImageIcon, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { StatusBadge } from "./StatusBadge";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
@@ -33,6 +34,29 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+async function uploadFileToBlob(
+  file: File,
+  filename: string
+): Promise<string | null> {
+  // Request a short-lived client token from the server
+  const tokenRes = await fetch(
+    `/api/photos/upload-token?filename=${encodeURIComponent(filename)}`
+  );
+  if (!tokenRes.ok) return null; // blob not configured — fall back to base64
+
+  const { token, pathname } = await tokenRes.json();
+
+  // Upload directly from the browser to Vercel Blob (no serverless body-size limit)
+  const { put } = await import("@vercel/blob/client");
+  const blob = await put(pathname, file, {
+    access: "public",
+    token,
+    contentType: file.type,
+    multipart: true,
+  });
+  return blob.url;
+}
+
 export function PhotoUploadGrid({
   propertyId,
   photos,
@@ -61,16 +85,30 @@ export function PhotoUploadGrid({
       for (const file of Array.from(files)) {
         if (!file.type.startsWith("image/")) continue;
 
-        const b64 = await fileToBase64(file);
         const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+
+        // Try direct browser→Blob upload (bypasses Vercel's 4.5 MB serverless limit)
+        let blobUrl: string | null = null;
+        try {
+          blobUrl = await uploadFileToBlob(file, filename);
+        } catch (err) {
+          console.error("Client-side blob upload failed, falling back to base64", err);
+        }
+
+        // Build the registration payload — blobUrl if upload succeeded, else base64 fallback
+        const body = blobUrl
+          ? { filename, mimeType: file.type, blobUrl }
+          : { filename, mimeType: file.type, b64: await fileToBase64(file) };
 
         const uploadRes = await fetch("/api/photos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename, mimeType: file.type, b64 }),
+          body: JSON.stringify(body),
         });
         if (!uploadRes.ok) {
-          console.error("Photo upload failed", await uploadRes.text());
+          const msg = await uploadRes.text().catch(() => "Unknown error");
+          console.error("Photo upload failed", msg);
+          toast.error(`Failed to upload "${file.name}"`);
           continue;
         }
 
@@ -80,17 +118,21 @@ export function PhotoUploadGrid({
           body: JSON.stringify({ filename }),
         });
         if (!attachRes.ok) {
-          console.error("Attach photo failed", await attachRes.text());
+          const msg = await attachRes.text().catch(() => "Unknown error");
+          console.error("Attach photo failed", msg);
+          toast.error(`Failed to attach "${file.name}" to property`);
           continue;
         }
         const attached = await attachRes.json();
         newPhotos.push({
           ...attached,
-          image_url: null,
+          image_url: blobUrl ?? null,
           original_url: null,
         });
       }
-      onPhotosChange([...photos, ...newPhotos]);
+      if (newPhotos.length > 0) {
+        onPhotosChange([...photos, ...newPhotos]);
+      }
     } finally {
       setUploading(false);
     }

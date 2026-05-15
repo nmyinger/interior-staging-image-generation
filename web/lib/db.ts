@@ -120,7 +120,6 @@ export async function migrate() {
   await sql`ALTER TABLE photos ADD COLUMN IF NOT EXISTS sha256 TEXT NULL`;
   await sql`ALTER TABLE photos ADD COLUMN IF NOT EXISTS original_url TEXT NULL`;
   await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS org_id TEXT NULL`;
-  await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS property_id TEXT NULL REFERENCES properties(id) ON DELETE SET NULL`;
 
   // -------------------------------------------------------------------------
   // Tenancy
@@ -203,6 +202,9 @@ export async function migrate() {
       created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+
+  // Add sessions.property_id FK here (after properties table exists)
+  await sql`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS property_id TEXT NULL REFERENCES properties(id) ON DELETE SET NULL`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS property_photos (

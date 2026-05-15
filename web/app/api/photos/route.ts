@@ -35,19 +35,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "File too large (max 10 MB)" }, { status: 413 });
   }
 
+  // blobUrl: already uploaded client-side (preferred path)
+  // b64: legacy fallback for dev environments without Blob configured
   const photoUploadSchema = z.object({
-    filename: z.string(),
-    mimeType: z.string(),
-    b64: z.string(),
+    filename: z.string().min(1),
+    mimeType: z.string().min(1),
+    blobUrl: z.string().optional(),
+    b64: z.string().optional(),
   });
 
   const parsed = photoUploadSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
   }
-  const { filename, mimeType, b64 } = parsed.data;
+  const { filename, mimeType, blobUrl, b64 } = parsed.data;
 
-  if (b64.length > MAX_UPLOAD_BYTES) {
+  if (!blobUrl && !b64) {
+    return NextResponse.json({ error: "Either blobUrl or b64 is required" }, { status: 400 });
+  }
+
+  if (b64 && b64.length > MAX_UPLOAD_BYTES) {
     return NextResponse.json({ error: "File too large (max 10 MB)" }, { status: 413 });
   }
 
@@ -60,20 +67,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, photo: existing[0] });
   }
 
-  if (isBlobConfigured()) {
-    const imageUrl = await uploadToBlob(`photos/${uid}/${filename}`, b64, mimeType);
+  if (blobUrl) {
+    // Client already uploaded directly to Blob — just register the URL
     await sql`
       INSERT INTO photos (filename, user_id, room_type, zone, default_prompt, image_url, mime_type)
-      VALUES (${filename}, ${uid}, 'unknown', 'unknown', '', ${imageUrl}, ${mimeType})
+      VALUES (${filename}, ${uid}, 'unknown', 'unknown', '', ${blobUrl}, ${mimeType})
       ON CONFLICT (filename) DO UPDATE
         SET user_id = EXCLUDED.user_id, image_url = EXCLUDED.image_url
     `;
-  } else {
-    await sql`
-      INSERT INTO photos (filename, user_id, room_type, zone, default_prompt, image_b64, mime_type)
-      VALUES (${filename}, ${uid}, 'unknown', 'unknown', '', ${b64}, ${mimeType})
-      ON CONFLICT (filename) DO NOTHING
-    `;
+  } else if (b64) {
+    if (isBlobConfigured()) {
+      const imageUrl = await uploadToBlob(`photos/${uid}/${filename}`, b64, mimeType);
+      await sql`
+        INSERT INTO photos (filename, user_id, room_type, zone, default_prompt, image_url, mime_type)
+        VALUES (${filename}, ${uid}, 'unknown', 'unknown', '', ${imageUrl}, ${mimeType})
+        ON CONFLICT (filename) DO UPDATE
+          SET user_id = EXCLUDED.user_id, image_url = EXCLUDED.image_url
+      `;
+    } else {
+      await sql`
+        INSERT INTO photos (filename, user_id, room_type, zone, default_prompt, image_b64, mime_type)
+        VALUES (${filename}, ${uid}, 'unknown', 'unknown', '', ${b64}, ${mimeType})
+        ON CONFLICT (filename) DO UPDATE
+          SET user_id = EXCLUDED.user_id, image_b64 = EXCLUDED.image_b64
+      `;
+    }
   }
 
   return NextResponse.json({ ok: true, photo: { filename, room_type: "unknown", zone: "unknown", default_prompt: "" } });
