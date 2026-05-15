@@ -14,7 +14,6 @@ export interface PropertyPhoto {
   position: number;
   image_url: string | null;
   original_url: string | null;
-  // batch item status for this photo — injected from parent when a batch is running
   batchStatus?: "queued" | "analyzing" | "generating" | "done" | "failed";
   stagedUrl?: string | null;
 }
@@ -65,7 +64,6 @@ export function PhotoUploadGrid({
         const b64 = await fileToBase64(file);
         const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
 
-        // 1. Upload to photos table
         const uploadRes = await fetch("/api/photos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -76,7 +74,6 @@ export function PhotoUploadGrid({
           continue;
         }
 
-        // 2. Attach to property
         const attachRes = await fetch(`/api/properties/${propertyId}/photos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -89,7 +86,7 @@ export function PhotoUploadGrid({
         const attached = await attachRes.json();
         newPhotos.push({
           ...attached,
-          image_url: null, // will be set after full page refresh/re-fetch
+          image_url: null,
           original_url: null,
         });
       }
@@ -110,15 +107,25 @@ export function PhotoUploadGrid({
     if (e.dataTransfer.files) uploadFiles(e.dataTransfer.files);
   }
 
+  const hasRoomTypes = photos.some((p) => p.room_type !== null);
+  const hasStaged = photos.some((p) => p.stagedUrl);
+
+  // Group photos by room when analysis has run
+  const grouped: Record<string, PropertyPhoto[]> = {};
+  if (hasRoomTypes) {
+    for (const photo of photos) {
+      const key = photo.room_type ?? "Other";
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(photo);
+    }
+  }
+
   return (
     <div
       className={`relative rounded-xl border-2 border-dashed transition-colors ${
         dragOver ? "border-sage-400 bg-sage-50" : "border-stone-200 bg-stone-50/50"
       }`}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragOver(true);
-      }}
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
     >
@@ -131,7 +138,7 @@ export function PhotoUploadGrid({
         onChange={handleInputChange}
       />
 
-      {/* Upload button row */}
+      {/* Header row */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200">
         <span className="text-xs text-stone-500 font-medium">
           {photos.length === 0 ? "No photos yet" : `${photos.length} photo${photos.length !== 1 ? "s" : ""}`}
@@ -146,13 +153,32 @@ export function PhotoUploadGrid({
         </button>
       </div>
 
-      {/* Grid */}
+      {/* Body */}
       {photos.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-stone-400">
           <ImageIcon size={32} strokeWidth={1.25} />
           <span className="text-sm">Drop photos here or click Add photos</span>
         </div>
+      ) : hasRoomTypes ? (
+        // Grouped by room with before/after columns
+        <div className="divide-y divide-stone-100">
+          {Object.entries(grouped).map(([room, roomPhotos]) => (
+            <RoomSection key={room} room={room} photos={roomPhotos} onRemove={removePhoto} />
+          ))}
+        </div>
+      ) : hasStaged ? (
+        // No room types yet but staging done — before/after flat layout
+        <div className="p-4 space-y-1">
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">Unfurnished</p>
+            <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">Furnished</p>
+          </div>
+          {photos.map((photo) => (
+            <BeforeAfterRow key={photo.id} photo={photo} onRemove={removePhoto} />
+          ))}
+        </div>
       ) : (
+        // Default flat grid — upload and manage phase
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4">
           {photos.map((photo) => (
             <PhotoCard key={photo.id} photo={photo} onRemove={removePhoto} />
@@ -163,27 +189,111 @@ export function PhotoUploadGrid({
   );
 }
 
+function RoomSection({
+  room,
+  photos,
+  onRemove,
+}: {
+  room: string;
+  photos: PropertyPhoto[];
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <div className="p-4">
+      <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide mb-3">{room}</p>
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">Unfurnished</p>
+        <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">Furnished</p>
+      </div>
+      <div className="space-y-2">
+        {photos.map((photo) => (
+          <BeforeAfterRow key={photo.id} photo={photo} onRemove={onRemove} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BeforeAfterRow({
+  photo,
+  onRemove,
+}: {
+  photo: PropertyPhoto;
+  onRemove: (id: string) => void;
+}) {
+  const originalUrl = photo.image_url ?? photo.original_url;
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {/* Unfurnished */}
+      <div className="group relative rounded-lg overflow-hidden border border-stone-200 bg-white aspect-[4/3]">
+        {originalUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={originalUrl} alt={photo.photo_filename} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <ImageIcon size={20} className="text-stone-300" strokeWidth={1.25} />
+          </div>
+        )}
+        {photo.is_hero && (
+          <span className="absolute top-1.5 left-1.5 flex items-center gap-0.5 bg-acacia-100/90 text-acacia-500 border border-acacia-200 rounded-full px-1.5 py-0.5 text-[10px] font-medium backdrop-blur-sm">
+            <Star size={9} fill="currentColor" />
+            Hero
+          </span>
+        )}
+        <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  onClick={() => onRemove(photo.id)}
+                  className="flex items-center justify-center w-6 h-6 rounded-md bg-white/90 border border-stone-200 text-stone-400 hover:text-clay-600 hover:border-clay-300 hover:bg-clay-50 backdrop-blur-sm transition-colors"
+                >
+                  <Trash2 size={11} />
+                </button>
+              }
+            />
+            <TooltipContent>Remove photo</TooltipContent>
+          </Tooltip>
+        </div>
+        {photo.batchStatus && photo.batchStatus !== "done" && (
+          <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+            <StatusBadge status={photo.batchStatus} />
+          </div>
+        )}
+      </div>
+
+      {/* Furnished */}
+      <div className="rounded-lg overflow-hidden border border-stone-200 bg-stone-50 aspect-[4/3] flex items-center justify-center">
+        {photo.stagedUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photo.stagedUrl} alt={`${photo.photo_filename} staged`} className="w-full h-full object-cover" />
+        ) : (
+          <div className="flex flex-col items-center gap-1.5 text-stone-300">
+            <ImageIcon size={20} strokeWidth={1.25} />
+            <span className="text-[10px]">Not staged</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PhotoCard({ photo, onRemove }: { photo: PropertyPhoto; onRemove: (id: string) => void }) {
   const imageUrl = photo.stagedUrl ?? photo.image_url ?? photo.original_url;
 
   return (
     <div className="group relative rounded-xl overflow-hidden border border-stone-200 bg-white shadow-sm">
-      {/* Image */}
       <div className="relative aspect-[4/3] bg-stone-100">
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt={photo.photo_filename}
-            className="absolute inset-0 w-full h-full object-cover"
-          />
+          <img src={imageUrl} alt={photo.photo_filename} className="absolute inset-0 w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <ImageIcon size={24} className="text-stone-300" strokeWidth={1.25} />
           </div>
         )}
 
-        {/* Overlay badges */}
         <div className="absolute top-1.5 left-1.5 flex gap-1">
           {photo.is_hero && (
             <span className="flex items-center gap-0.5 bg-acacia-100/90 text-acacia-500 border border-acacia-200 rounded-full px-1.5 py-0.5 text-[10px] font-medium backdrop-blur-sm">
@@ -193,7 +303,6 @@ function PhotoCard({ photo, onRemove }: { photo: PropertyPhoto; onRemove: (id: s
           )}
         </div>
 
-        {/* Remove button */}
         <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <Tooltip>
             <TooltipTrigger
@@ -210,7 +319,6 @@ function PhotoCard({ photo, onRemove }: { photo: PropertyPhoto; onRemove: (id: s
           </Tooltip>
         </div>
 
-        {/* Staged indicator overlay */}
         {photo.batchStatus === "done" && photo.stagedUrl && (
           <div className="absolute bottom-1.5 right-1.5">
             <StatusBadge status="done" />
@@ -223,7 +331,6 @@ function PhotoCard({ photo, onRemove }: { photo: PropertyPhoto; onRemove: (id: s
         )}
       </div>
 
-      {/* Footer */}
       <div className="px-2.5 py-2">
         <p className="text-[11px] text-stone-500 truncate" title={photo.photo_filename}>
           {photo.photo_filename.replace(/^\d+-/, "")}

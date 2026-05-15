@@ -3,7 +3,6 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { sql } from "@/lib/db";
-import { StatusBadge } from "@/components/properties/StatusBadge";
 import type { PropertyStatus } from "@/components/properties/StatusBadge";
 import { Plus, MapPin, Building2, Image as ImageIcon } from "lucide-react";
 
@@ -15,6 +14,7 @@ interface PropertyRow {
   status: PropertyStatus;
   created_at: string;
   photo_count: number;
+  preview_urls: string[];
 }
 
 async function getProperties(uid: string): Promise<PropertyRow[]> {
@@ -24,13 +24,16 @@ async function getProperties(uid: string): Promise<PropertyRow[]> {
 
   const rows = await sql`
     SELECT
-      p.id,
-      p.name,
-      p.address,
-      p.mls,
-      p.status,
-      p.created_at,
-      COUNT(pp.id)::int AS photo_count
+      p.id, p.name, p.address, p.mls, p.status, p.created_at,
+      COUNT(pp.id)::int AS photo_count,
+      ARRAY(
+        SELECT ph.image_url
+        FROM property_photos pp2
+        JOIN photos ph ON ph.filename = pp2.photo_filename
+        WHERE pp2.property_id = p.id AND ph.image_url IS NOT NULL
+        ORDER BY pp2.position
+        LIMIT 3
+      ) AS preview_urls
     FROM properties p
     LEFT JOIN property_photos pp ON pp.property_id = p.id
     WHERE p.org_id = ${orgId}
@@ -114,7 +117,6 @@ function PropertyCard({ property }: { property: PropertyRow }) {
     >
       <div className="flex items-start gap-3 flex-wrap">
         <h2 className="text-sm font-semibold text-stone-800">{property.name}</h2>
-        <StatusBadge status={property.status} />
         {property.mls && (
           <span className="inline-flex items-center gap-1 text-[11px] text-acacia-500 bg-acacia-100 border border-acacia-200 rounded-full px-2 py-0.5 font-medium">
             {property.mls}
@@ -136,6 +138,17 @@ function PropertyCard({ property }: { property: PropertyRow }) {
         </span>
         <span className="text-[11px] text-stone-400">{date}</span>
       </div>
+
+      {property.preview_urls?.length > 0 && (
+        <div className="flex gap-1.5 mt-3">
+          {property.preview_urls.slice(0, 3).map((url, i) => (
+            <div key={i} className="w-16 h-11 rounded-lg overflow-hidden bg-stone-100 border border-stone-200 shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" className="w-full h-full object-cover" />
+            </div>
+          ))}
+        </div>
+      )}
     </Link>
   );
 }

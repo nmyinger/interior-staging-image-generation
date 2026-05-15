@@ -30,6 +30,7 @@ import {
   Frame,
   Plus,
 } from "lucide-react";
+import { toast } from "sonner";
 
 const MLS_OPTIONS = [
   { value: "", label: "None" },
@@ -242,10 +243,9 @@ export default function PropertyDetailPage() {
     }
   }
 
-  function handleBatchComplete(items: BatchItem[]) {
+  async function handleBatchComplete(items: BatchItem[]) {
     setCompletedItems(items);
     setProperty((p) => (p ? { ...p, status: "done" } : p));
-    // Merge staged URLs into photos
     setPhotos((prev) =>
       prev.map((photo) => {
         const matchedItem = items.find(
@@ -257,6 +257,55 @@ export default function PropertyDetailPage() {
         return photo;
       })
     );
+
+    // Auto-create a canvas with the staged results
+    const stagedItems = items.filter((i) => i.staged_url);
+    if (stagedItems.length === 0) return;
+
+    try {
+      const sessionRes = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ property_id: propertyId }),
+      });
+      if (!sessionRes.ok) return;
+      const { id: newSessionId } = await sessionRes.json();
+
+      // Build source + generation node pairs for each staged photo
+      const nodes: Array<{ id: string; type: string; x: number; y: number; data: Record<string, unknown> }> = [];
+      const edges: Array<{ id: string; source: string; sourceHandle: string; target: string; targetHandle: string }> = [];
+
+      stagedItems.forEach((item, i) => {
+        const y = i * 260;
+        const sourceNodeId = crypto.randomUUID();
+        const genNodeId = crypto.randomUUID();
+
+        if (item.original_url) {
+          nodes.push({ id: sourceNodeId, type: "photo", x: 50, y, data: { filename: item.photo_filename, photoUrl: item.original_url } });
+          nodes.push({ id: genNodeId, type: "generation", x: 420, y, data: { prompt: "", status: "done", outputUrl: item.staged_url, outputImageUrl: item.staged_url } });
+          edges.push({ id: crypto.randomUUID(), source: sourceNodeId, sourceHandle: "photo", target: genNodeId, targetHandle: "base" });
+        } else {
+          nodes.push({ id: genNodeId, type: "generation", x: 50, y, data: { prompt: "", status: "done", outputUrl: item.staged_url, outputImageUrl: item.staged_url } });
+        }
+      });
+
+      await fetch("/api/canvas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: newSessionId, nodes, edges }),
+      });
+
+      // Refresh canvases list
+      const canvasListRes = await fetch(`/api/sessions?property_id=${propertyId}`);
+      if (canvasListRes.ok) {
+        const data = await canvasListRes.json();
+        setCanvases(data.sessions ?? []);
+      }
+
+      toast.success("Canvas created with your staged results");
+    } catch {
+      // Canvas creation is best-effort; don't surface to user
+    }
   }
 
   const batchIsActive =
@@ -327,7 +376,7 @@ export default function PropertyDetailPage() {
                   />
                 </button>
               )}
-              <StatusBadge status={property.status} />
+              {property.status !== "draft" && <StatusBadge status={property.status} />}
               {property.mls && (
                 <span className="inline-flex items-center text-[11px] text-acacia-500 bg-acacia-100 border border-acacia-200 rounded-full px-2 py-0.5 font-medium">
                   {property.mls}
