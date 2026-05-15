@@ -5,7 +5,7 @@ import Link from "next/link";
 import { sql } from "@/lib/db";
 import { StatusBadge } from "@/components/properties/StatusBadge";
 import type { PropertyStatus } from "@/components/properties/StatusBadge";
-import { UserMenu } from "@/components/UserMenu";
+import { AppHeader } from "@/components/AppHeader";
 import { Plus, MapPin, Building2, Image as ImageIcon } from "lucide-react";
 
 interface PropertyRow {
@@ -52,24 +52,15 @@ export default async function PropertiesPage() {
 
   return (
     <main className="min-h-screen bg-stone-50">
-      {/* Header */}
-      <header className="h-12 bg-stone-50 border-b border-stone-200 flex items-center px-4 shrink-0 sticky top-0 z-10">
-        <div className="flex items-center gap-2">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded bg-sage-600 flex items-center justify-center">
-              <span className="text-white text-[10px] font-bold">VS</span>
-            </div>
-            <span className="text-sm font-semibold text-stone-800">Virtual Staging</span>
-          </Link>
-          <span className="text-stone-300 mx-1">/</span>
-          <span className="text-sm text-stone-600">Properties</span>
-        </div>
-        <div className="ml-auto">
-          <UserMenu />
-        </div>
-      </header>
+      <AppHeader breadcrumb={<span className="text-sm text-stone-600">Properties</span>} />
 
       <div className="max-w-4xl mx-auto px-6 py-8">
+        {/* Tab strip */}
+        <div className="flex items-center gap-6 border-b border-stone-200 mb-6">
+          <Link href="/" className="text-sm text-stone-400 hover:text-stone-600 pb-2.5 border-b-2 border-transparent -mb-px transition-colors">Sessions</Link>
+          <span className="text-sm font-medium text-stone-900 pb-2.5 border-b-2 border-stone-900 -mb-px">Properties</span>
+        </div>
+
         {/* Page header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -126,7 +117,7 @@ function PropertyCard({ property }: { property: PropertyRow }) {
   });
 
   return (
-    <div className="bg-white rounded-2xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all p-5 flex items-start gap-4">
+    <div className="bg-white rounded-xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all p-5 flex items-start gap-4">
       {/* Left: meta */}
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-3 flex-wrap">

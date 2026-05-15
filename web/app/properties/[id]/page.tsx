@@ -3,7 +3,14 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { UserMenu } from "@/components/UserMenu";
+import { AppHeader } from "@/components/AppHeader";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { StatusBadge } from "@/components/properties/StatusBadge";
 import type { PropertyStatus } from "@/components/properties/StatusBadge";
 import { PhotoUploadGrid } from "@/components/properties/PhotoUploadGrid";
@@ -247,31 +254,13 @@ export default function PropertyDetailPage() {
 
   return (
     <main className="min-h-screen bg-stone-50">
-      {/* Header */}
-      <header className="h-12 bg-stone-50 border-b border-stone-200 flex items-center px-4 sticky top-0 z-10">
-        <div className="flex items-center gap-2 min-w-0">
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <div className="w-5 h-5 rounded bg-sage-600 flex items-center justify-center">
-              <span className="text-white text-[10px] font-bold">VS</span>
-            </div>
-            <span className="text-sm font-semibold text-stone-800 hidden sm:block">
-              Virtual Staging
-            </span>
-          </Link>
-          <span className="text-stone-300 mx-1">/</span>
-          <Link
-            href="/properties"
-            className="text-sm text-stone-500 hover:text-stone-700 shrink-0"
-          >
-            Properties
-          </Link>
-          <span className="text-stone-300 mx-1">/</span>
-          <span className="text-sm text-stone-600 truncate">{property.name}</span>
-        </div>
-        <div className="ml-auto shrink-0 pl-4">
-          <UserMenu />
-        </div>
-      </header>
+      <AppHeader breadcrumb={
+        <>
+          <Link href="/properties" className="text-sm text-stone-500 hover:text-stone-700 transition-colors shrink-0">Properties</Link>
+          <span className="text-stone-300 mx-0.5">/</span>
+          <span className="text-sm text-stone-700 truncate max-w-[200px]">{property.name}</span>
+        </>
+      } />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         {/* Back link */}
@@ -353,17 +342,16 @@ export default function PropertyDetailPage() {
                   <label className="block text-xs font-medium text-stone-500">
                     Design style
                   </label>
-                  <select
-                    value={style}
-                    onChange={(e) => setStyle(e.target.value)}
-                    className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 outline-none focus:border-sage-400 transition-colors bg-white text-stone-700 appearance-none"
-                  >
-                    {STYLE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  <Select value={style} onValueChange={(val) => setStyle(val ?? "")}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STYLE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Color palette notes */}
@@ -397,10 +385,10 @@ export default function PropertyDetailPage() {
                 {/* MLS selector */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-medium text-stone-500">MLS board</label>
-                  <select
+                  <Select
                     value={property.mls ?? ""}
-                    onChange={async (e) => {
-                      const mls = e.target.value || null;
+                    onValueChange={async (val) => {
+                      const mls = val || null;
                       setProperty((p) => (p ? { ...p, mls } : p));
                       await fetch(`/api/properties/${propertyId}`, {
                         method: "PATCH",
@@ -408,14 +396,16 @@ export default function PropertyDetailPage() {
                         body: JSON.stringify({ mls }),
                       });
                     }}
-                    className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 outline-none focus:border-sage-400 transition-colors bg-white text-stone-700 appearance-none"
                   >
-                    {MLS_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MLS_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.value ? opt.label : "None"}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Save button */}

@@ -3,6 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { X, Copy, Check, Trash2, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 
 interface Invite {
   email: string;
@@ -221,14 +228,18 @@ export function ShareModal({ sessionId, onClose }: ShareModalProps) {
                   placeholder="email@example.com"
                   className="flex-1 min-w-0 text-xs border border-stone-200 rounded-lg px-3 py-2 outline-none focus:border-sage-400 transition-colors"
                 />
-                <select
+                <Select
                   value={inviteRole}
-                  onChange={e => setInviteRole(e.target.value as "viewer" | "editor")}
-                  className="text-xs border border-stone-200 rounded-lg px-2 py-2 outline-none focus:border-sage-400 bg-white text-stone-700 shrink-0"
+                  onValueChange={(val) => { if (val) setInviteRole(val as "viewer" | "editor"); }}
                 >
-                  <option value="viewer">Viewer</option>
-                  <option value="editor">Editor</option>
-                </select>
+                  <SelectTrigger size="sm" className="shrink-0 w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="viewer">Viewer</SelectItem>
+                    <SelectItem value="editor">Editor</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Button
                   size="sm"
                   onClick={handleAddInvite}

@@ -1,6 +1,14 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { AppHeader } from "@/components/AppHeader";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import type { DisclosureRow } from "./page";
 
 // ---------------------------------------------------------------------------
@@ -192,24 +200,13 @@ export default function ComplianceDashboard({
 
   return (
     <main className="min-h-screen bg-stone-50">
-      {/* ── Nav header ─────────────────────────────────────────────────────── */}
-      <header className="border-b border-stone-200 bg-white px-4 py-3 flex items-center gap-3">
-        <div className="w-5 h-5 rounded bg-sage-600 flex items-center justify-center">
-          <span className="text-white text-[10px] font-bold">VS</span>
-        </div>
-        <span className="text-sm font-semibold text-stone-800">
-          Virtual Staging
-        </span>
-        <span className="text-stone-300 text-sm">/</span>
-        <a
-          href="/admin"
-          className="text-sm text-stone-500 hover:text-stone-700 transition-colors"
-        >
-          Admin
-        </a>
-        <span className="text-stone-300 text-sm">/</span>
-        <span className="text-sm text-stone-700 font-medium">Compliance</span>
-      </header>
+      <AppHeader breadcrumb={
+        <>
+          <a href="/admin" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Admin</a>
+          <span className="text-stone-300 mx-0.5">/</span>
+          <span className="text-sm text-stone-700">Compliance</span>
+        </>
+      } />
 
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-5">
         {/* ── Header row ───────────────────────────────────────────────────── */}
@@ -243,16 +240,17 @@ export default function ComplianceDashboard({
             </button>
 
             {/* Date range */}
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value as DateRange)}
-              className="h-8 px-2.5 rounded-lg border border-stone-200 text-xs font-medium text-stone-600 bg-white focus:outline-none focus:ring-1 focus:ring-stone-300 transition-colors"
-            >
-              <option value="all">All time</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="90d">Last 90 days</option>
-            </select>
+            <Select value={dateRange} onValueChange={(val) => { if (val) setDateRange(val as DateRange); }}>
+              <SelectTrigger size="sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All time</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -280,29 +278,29 @@ export default function ComplianceDashboard({
         {/* ── Filter bar ───────────────────────────────────────────────────── */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* MLS */}
-          <select
-            value={mlsFilter}
-            onChange={(e) => setMlsFilter(e.target.value)}
-            className="h-8 px-2.5 rounded-lg border border-stone-200 text-xs font-medium text-stone-600 bg-white focus:outline-none focus:ring-1 focus:ring-stone-300 transition-colors"
-          >
-            <option value="all">All MLS boards</option>
-            {mlsOptions.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
+          <Select value={mlsFilter} onValueChange={(val) => { if (val !== null) setMlsFilter(val); }}>
+            <SelectTrigger size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All MLS boards</SelectItem>
+              {mlsOptions.map((m) => (
+                <SelectItem key={m} value={m}>{m}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {/* Status */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="h-8 px-2.5 rounded-lg border border-stone-200 text-xs font-medium text-stone-600 bg-white focus:outline-none focus:ring-1 focus:ring-stone-300 transition-colors"
-          >
-            <option value="active">Active</option>
-            <option value="revoked">Revoked</option>
-            <option value="all">All statuses</option>
-          </select>
+          <Select value={statusFilter} onValueChange={(val) => { if (val) setStatusFilter(val as StatusFilter); }}>
+            <SelectTrigger size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="revoked">Revoked</SelectItem>
+              <SelectItem value="all">All statuses</SelectItem>
+            </SelectContent>
+          </Select>
 
           {/* Search */}
           <div className="relative flex-1 min-w-[200px]">

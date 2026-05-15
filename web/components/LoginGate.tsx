@@ -4,7 +4,15 @@ import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2, Plus, MoreHorizontal } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 interface SessionRow {
   id: string;
@@ -19,20 +27,7 @@ export function LoginGate() {
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const editRef = useRef<HTMLInputElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menuOpenId) return;
-    function handleMouseDown(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpenId(null);
-      }
-    }
-    document.addEventListener("mousedown", handleMouseDown);
-    return () => document.removeEventListener("mousedown", handleMouseDown);
-  }, [menuOpenId]);
 
   useEffect(() => {
     if (!session) return;
@@ -60,15 +55,7 @@ export function LoginGate() {
     setTimeout(() => editRef.current?.select(), 0);
   }, []);
 
-  const startRenameFromMenu = useCallback((s: SessionRow) => {
-    setMenuOpenId(null);
-    setEditingId(s.id);
-    setEditDraft(s.name);
-    setTimeout(() => editRef.current?.select(), 0);
-  }, []);
-
   const deleteSession = useCallback(async (id: string) => {
-    setMenuOpenId(null);
     setSessions((prev) => (prev ?? []).filter((s) => s.id !== id));
     await fetch(`/api/sessions/${id}`, { method: "DELETE" });
   }, []);
@@ -106,10 +93,11 @@ export function LoginGate() {
           </div>
         </div>
         <Button
+          variant="outline"
           onClick={() => signIn("google")}
-          className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm px-6 flex items-center gap-3"
+          className="px-6 gap-3 shadow-sm"
         >
-          <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" xmlns="http://www.w3.org/2000/svg">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
             <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
@@ -123,7 +111,11 @@ export function LoginGate() {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-10">
-      <h2 className="text-lg font-semibold text-stone-800 mb-6">Sessions</h2>
+      {/* C3: nav tab strip */}
+      <div className="flex items-center gap-6 border-b border-stone-200 mb-6">
+        <span className="text-sm font-medium text-stone-900 pb-2.5 border-b-2 border-stone-900 -mb-px">Sessions</span>
+        <Link href="/properties" className="text-sm text-stone-400 hover:text-stone-600 pb-2.5 border-b-2 border-transparent -mb-px transition-colors">Properties</Link>
+      </div>
 
       {sessions === null ? (
         <div className="flex items-center justify-center py-16 text-stone-300">
@@ -134,7 +126,7 @@ export function LoginGate() {
           <button
             onClick={createSession}
             disabled={creating}
-            className="group flex items-center gap-3 p-5 rounded-2xl border border-dashed border-stone-300 hover:border-stone-400 hover:bg-stone-50 transition-all text-left"
+            className="group flex items-center gap-3 p-5 rounded-xl border border-dashed border-stone-300 hover:border-stone-400 hover:bg-stone-50 transition-all text-left"
           >
             {creating ? (
               <Loader2 size={15} className="text-stone-400 animate-spin shrink-0" />
@@ -147,43 +139,36 @@ export function LoginGate() {
           {sessions.map((s) => (
             <div
               key={s.id}
-              className="group relative flex flex-col justify-between p-5 bg-white rounded-2xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all cursor-pointer"
+              className="group relative flex flex-col justify-between p-5 bg-white rounded-xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all cursor-pointer"
               onClick={() => {
                 if (editingId === s.id) return;
-                if (menuOpenId === s.id) { setMenuOpenId(null); return; }
                 router.push(`/session/${s.id}`);
               }}
             >
-              <button
-                className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-stone-100 transition-all"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMenuOpenId(menuOpenId === s.id ? null : s.id);
-                }}
-              >
-                <MoreHorizontal size={14} className="text-stone-400" />
-              </button>
-
-              {menuOpenId === s.id && (
-                <div
-                  ref={menuRef}
-                  className="absolute top-9 right-3 z-10 bg-white border border-stone-200 rounded-xl shadow-md py-1 min-w-[120px]"
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-stone-100 transition-all outline-none"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <button
-                    className="w-full text-left px-3 py-2 text-xs text-stone-700 hover:bg-stone-50"
-                    onClick={() => startRenameFromMenu(s)}
-                  >
+                  <MoreHorizontal size={14} className="text-stone-400" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" sideOffset={4} onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuItem onClick={() => {
+                    setEditingId(s.id);
+                    setEditDraft(s.name);
+                    setTimeout(() => editRef.current?.select(), 0);
+                  }}>
                     Rename
-                  </button>
-                  <button
-                    className="w-full text-left px-3 py-2 text-xs text-clay-600 hover:bg-stone-50"
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
                     onClick={() => deleteSession(s.id)}
                   >
                     Delete
-                  </button>
-                </div>
-              )}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {editingId === s.id ? (
                 <input

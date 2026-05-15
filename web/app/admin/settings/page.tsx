@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AppHeader } from "@/components/AppHeader";
 
 interface MlsRule {
   code: string;
@@ -85,19 +86,13 @@ export default function OrgSettingsPage() {
 
   return (
     <main className="min-h-screen bg-stone-50">
-      {/* Header */}
-      <header className="border-b border-stone-200 bg-white px-4 py-3 flex items-center gap-3">
-        <div className="w-5 h-5 rounded bg-sage-600 flex items-center justify-center">
-          <span className="text-white text-[10px] font-bold">VS</span>
-        </div>
-        <span className="text-sm font-semibold text-stone-800">Virtual Staging</span>
-        <span className="text-stone-300 text-sm">/</span>
-        <a href="/admin" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">
-          Admin
-        </a>
-        <span className="text-stone-300 text-sm">/</span>
-        <span className="text-sm text-stone-500">Settings</span>
-      </header>
+      <AppHeader breadcrumb={
+        <>
+          <a href="/admin" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Admin</a>
+          <span className="text-stone-300 mx-0.5">/</span>
+          <span className="text-sm text-stone-700">Settings</span>
+        </>
+      } />
 
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         {/* Page heading */}

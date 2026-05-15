@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql, migrate } from "@/lib/db";
+import { AppHeader } from "@/components/AppHeader";
 import { listSubAccounts, getUserOrg } from "@/lib/orgs";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -60,21 +61,13 @@ export default async function TeamPage() {
 
   return (
     <main className="min-h-screen bg-stone-50">
-      {/* Header */}
-      <header className="border-b border-stone-200 bg-white px-4 py-3 flex items-center gap-3">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded bg-sage-600 flex items-center justify-center">
-            <span className="text-white text-[10px] font-bold">VS</span>
-          </div>
-          <span className="text-sm font-semibold text-stone-800">Virtual Staging</span>
-        </Link>
-        <span className="text-stone-300 text-sm">/</span>
-        <Link href="/admin" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">
-          Admin
-        </Link>
-        <span className="text-stone-300 text-sm">/</span>
-        <span className="text-sm text-stone-700">Team &amp; Clients</span>
-      </header>
+      <AppHeader breadcrumb={
+        <>
+          <Link href="/admin" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Admin</Link>
+          <span className="text-stone-300 mx-0.5">/</span>
+          <span className="text-sm text-stone-700">Team &amp; Clients</span>
+        </>
+      } />
 
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-10">
         {/* Page title + action */}
