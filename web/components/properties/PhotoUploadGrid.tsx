@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Upload, Star, ImageIcon, Trash2 } from "lucide-react";
+import { Upload, Star, ImageIcon, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { StatusBadge } from "./StatusBadge";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -19,6 +19,12 @@ export interface PropertyPhoto {
   stagedUrl?: string | null;
 }
 
+interface PendingPreview {
+  tempId: string;
+  objectUrl: string;
+  filename: string;
+}
+
 interface PhotoUploadGridProps {
   propertyId: string;
   photos: PropertyPhoto[];
@@ -32,6 +38,13 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function sizedUrl(url: string | null | undefined, w: number): string | null {
+  if (!url) return null;
+  if (!url.startsWith("http")) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}width=${w}`;
 }
 
 async function uploadFileToBlob(
@@ -65,6 +78,7 @@ export function PhotoUploadGrid({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [pendingPreviews, setPendingPreviews] = useState<PendingPreview[]>([]);
 
   async function removePhoto(photoId: string) {
     const res = await fetch(`/api/properties/${propertyId}/photos`, {
@@ -79,15 +93,25 @@ export function PhotoUploadGrid({
 
   async function uploadFiles(files: FileList) {
     if (!files.length) return;
+
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+
+    // Show local previews immediately
+    const newPreviews: PendingPreview[] = imageFiles.map((file, i) => ({
+      tempId: `${Date.now()}-${i}`,
+      objectUrl: URL.createObjectURL(file),
+      filename: file.name,
+    }));
+    setPendingPreviews(prev => [...prev, ...newPreviews]);
     setUploading(true);
+
     try {
       const newPhotos: PropertyPhoto[] = [];
-      for (const file of Array.from(files)) {
-        if (!file.type.startsWith("image/")) continue;
-
+      for (let i = 0; i < imageFiles.length; i++) {
+        const file = imageFiles[i];
         const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
 
-        // Try direct browser→Blob upload (bypasses Vercel's 4.5 MB serverless limit)
         let blobUrl: string | null = null;
         try {
           blobUrl = await uploadFileToBlob(file, filename);
@@ -95,7 +119,6 @@ export function PhotoUploadGrid({
           console.error("Client-side blob upload failed, falling back to base64", err);
         }
 
-        // Build the registration payload — blobUrl if upload succeeded, else base64 fallback
         const body = blobUrl
           ? { filename, mimeType: file.type, blobUrl }
           : { filename, mimeType: file.type, b64: await fileToBase64(file) };
@@ -124,12 +147,13 @@ export function PhotoUploadGrid({
           continue;
         }
         const attached = await attachRes.json();
-        newPhotos.push({
-          ...attached,
-          image_url: blobUrl ?? null,
-          original_url: null,
-        });
+        newPhotos.push({ ...attached, image_url: blobUrl ?? null, original_url: null });
       }
+
+      // Remove all previews and surface real photos atomically
+      const previewIds = new Set(newPreviews.map(p => p.tempId));
+      setPendingPreviews(prev => prev.filter(p => !previewIds.has(p.tempId)));
+      newPreviews.forEach(p => setTimeout(() => URL.revokeObjectURL(p.objectUrl), 100));
       if (newPhotos.length > 0) {
         onPhotosChange([...photos, ...newPhotos]);
       }
@@ -183,7 +207,9 @@ export function PhotoUploadGrid({
       {/* Header row */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200">
         <span className="text-xs text-stone-500 font-medium">
-          {photos.length === 0 ? "No photos yet" : `${photos.length} photo${photos.length !== 1 ? "s" : ""}`}
+          {photos.length === 0 && pendingPreviews.length === 0
+            ? "No photos yet"
+            : `${photos.length + pendingPreviews.length} photo${photos.length + pendingPreviews.length !== 1 ? "s" : ""}`}
         </span>
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -196,7 +222,7 @@ export function PhotoUploadGrid({
       </div>
 
       {/* Body */}
-      {photos.length === 0 ? (
+      {photos.length === 0 && pendingPreviews.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-stone-400">
           <ImageIcon size={32} strokeWidth={1.25} />
           <span className="text-sm">Drop photos here or click Add photos</span>
@@ -225,8 +251,28 @@ export function PhotoUploadGrid({
           {photos.map((photo) => (
             <PhotoCard key={photo.id} photo={photo} onRemove={removePhoto} />
           ))}
+          {pendingPreviews.map((p) => (
+            <UploadingCard key={p.tempId} preview={p} />
+          ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function UploadingCard({ preview }: { preview: PendingPreview }) {
+  return (
+    <div className="relative rounded-xl overflow-hidden border border-stone-200 bg-white shadow-sm">
+      <div className="relative aspect-[4/3] bg-stone-100">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={preview.objectUrl} alt={preview.filename} className="absolute inset-0 w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+          <Loader2 size={18} className="text-white animate-spin" />
+        </div>
+      </div>
+      <div className="px-2.5 py-2">
+        <p className="text-[11px] text-stone-500 truncate" title={preview.filename}>{preview.filename}</p>
+      </div>
     </div>
   );
 }
@@ -271,7 +317,7 @@ function BeforeAfterRow({
       <div className="group relative rounded-lg overflow-hidden border border-stone-200 bg-white aspect-[4/3]">
         {originalUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={originalUrl} alt={photo.photo_filename} className="w-full h-full object-cover" />
+          <img src={sizedUrl(originalUrl, 600) ?? undefined} alt={photo.photo_filename} loading="lazy" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <ImageIcon size={20} className="text-stone-300" strokeWidth={1.25} />
@@ -309,7 +355,7 @@ function BeforeAfterRow({
       <div className="rounded-lg overflow-hidden border border-stone-200 bg-stone-50 aspect-[4/3] flex items-center justify-center">
         {photo.stagedUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={photo.stagedUrl} alt={`${photo.photo_filename} staged`} className="w-full h-full object-cover" />
+          <img src={sizedUrl(photo.stagedUrl, 600) ?? undefined} alt={`${photo.photo_filename} staged`} loading="lazy" className="w-full h-full object-cover" />
         ) : (
           <div className="flex flex-col items-center gap-1.5 text-stone-300">
             <ImageIcon size={20} strokeWidth={1.25} />
@@ -322,14 +368,14 @@ function BeforeAfterRow({
 }
 
 function PhotoCard({ photo, onRemove }: { photo: PropertyPhoto; onRemove: (id: string) => void }) {
-  const imageUrl = photo.stagedUrl ?? photo.image_url ?? photo.original_url;
+  const imageUrl = sizedUrl(photo.stagedUrl ?? photo.image_url ?? photo.original_url, 400);
 
   return (
     <div className="group relative rounded-xl overflow-hidden border border-stone-200 bg-white shadow-sm">
       <div className="relative aspect-[4/3] bg-stone-100">
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageUrl} alt={photo.photo_filename} className="absolute inset-0 w-full h-full object-cover" />
+          <img src={imageUrl} alt={photo.photo_filename} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <ImageIcon size={24} className="text-stone-300" strokeWidth={1.25} />

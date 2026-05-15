@@ -16,6 +16,17 @@ import { GENERATION_MODELS, DEFAULT_MODEL_ID } from "@/lib/models";
 import { CanvasContext } from "./CanvasContext";
 import type { GenerationNodeData, PhotoNodeData } from "@/types/nodes";
 
+function largerUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith("blob:")) return url;
+  if (url.startsWith("/api/photos/")) return url.replace(/[?&]w=\d+/, "") + "?w=600";
+  if (url.startsWith("http")) {
+    const [base] = url.split("?");
+    return `${base}?width=600`;
+  }
+  return url;
+}
+
 interface HistoryEntry {
   id: string;
   outputUrl?: string;
@@ -147,7 +158,7 @@ export function NodeInspectorPanel({
               {photoData.photoUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={photoData.photoUrl}
+                  src={largerUrl(photoData.photoUrl)}
                   alt={photoData.filename}
                   className="w-full rounded-lg object-cover"
                 />

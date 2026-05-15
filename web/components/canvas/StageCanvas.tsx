@@ -132,7 +132,7 @@ export function StageCanvas({ sessionId, readOnly }: { sessionId: string; readOn
         if (n.type === "photo") {
           const data: PhotoNodeData = {
             filename: n.data.filename as string,
-            photoUrl: `/api/photos/${encodeURIComponent(n.data.filename as string)}?w=400`,
+            photoUrl: `/api/photos/${encodeURIComponent(n.data.filename as string)}?w=300`,
           };
           return { id: n.id, type: "photo", position: { x: n.x, y: n.y }, data: data as unknown as Record<string, unknown> };
         } else {
@@ -281,63 +281,90 @@ export function StageCanvas({ sessionId, readOnly }: { sessionId: string; readOn
     [setEdges, snapshot]
   );
 
-  // Upload a file and add a photo node at the given canvas position
+  // Upload a file and add a photo node at the given canvas position.
+  // Adds a local preview immediately via object URL, then replaces it with the real URL after upload.
   const createPhotoNode = useCallback(
     async (file: File, position: { x: number; y: number }) => {
+      const nodeId = newId();
       const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
 
-      // Try direct browser→Blob upload first (avoids Vercel's 4.5 MB serverless limit)
-      let blobUrl: string | null = null;
-      const tokenRes = await fetch(
-        `/api/photos/upload-token?filename=${encodeURIComponent(filename)}`
-      );
-      if (tokenRes.ok) {
-        const { token, pathname } = await tokenRes.json();
-        const { put } = await import("@vercel/blob/client");
-        const blob = await put(pathname, file, {
-          access: "public",
-          token,
-          contentType: file.type,
-          multipart: true,
-        });
-        blobUrl = blob.url;
-      }
-
-      // Fall back to base64 if blob isn't configured (local dev)
-      let body: Record<string, string>;
-      if (blobUrl) {
-        body = { filename, mimeType: file.type, blobUrl };
-      } else {
-        const b64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = e => {
-            const dataUrl = e.target?.result as string;
-            const match = dataUrl.match(/^data:[^;]+;base64,(.+)$/);
-            match ? resolve(match[1]) : reject(new Error("Invalid file"));
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        body = { filename, mimeType: file.type, b64 };
-      }
-
-      const res = await fetch("/api/photos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      const { photo } = await res.json();
-
-      const nodeData: PhotoNodeData = {
-        filename: photo.filename,
-        photoUrl: blobUrl ?? `/api/photos/${encodeURIComponent(photo.filename)}?w=400`,
-      };
       snapshot();
+
+      const previewUrl = URL.createObjectURL(file);
       setNodes(nds => [
         ...nds,
-        { id: newId(), type: "photo", position, data: nodeData as unknown as Record<string, unknown> },
+        {
+          id: nodeId,
+          type: "photo",
+          position,
+          data: { filename: file.name, photoUrl: previewUrl } as unknown as Record<string, unknown>,
+        },
       ]);
+
+      try {
+        let blobUrl: string | null = null;
+        try {
+          const tokenRes = await fetch(
+            `/api/photos/upload-token?filename=${encodeURIComponent(filename)}`
+          );
+          if (tokenRes.ok) {
+            const { token, pathname } = await tokenRes.json();
+            const { put } = await import("@vercel/blob/client");
+            const blob = await put(pathname, file, {
+              access: "public",
+              token,
+              contentType: file.type,
+              multipart: true,
+            });
+            blobUrl = blob.url;
+          }
+        } catch (err) {
+          console.error("Blob upload failed, falling back to base64", err);
+        }
+
+        let body: Record<string, string>;
+        if (blobUrl) {
+          body = { filename, mimeType: file.type, blobUrl };
+        } else {
+          const b64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => {
+              const dataUrl = e.target?.result as string;
+              const match = dataUrl.match(/^data:[^;]+;base64,(.+)$/);
+              match ? resolve(match[1]) : reject(new Error("Invalid file"));
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+          body = { filename, mimeType: file.type, b64 };
+        }
+
+        const res = await fetch("/api/photos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error("Upload failed");
+        const { photo } = await res.json();
+
+        const finalUrl = blobUrl
+          ? `${blobUrl}?width=300`
+          : `/api/photos/${encodeURIComponent(photo.filename)}?w=300`;
+
+        setNodes(nds =>
+          nds.map(n =>
+            n.id === nodeId
+              ? { ...n, data: { filename: photo.filename, photoUrl: finalUrl } as unknown as Record<string, unknown> }
+              : n
+          )
+        );
+      } catch (err) {
+        setNodes(nds => nds.filter(n => n.id !== nodeId));
+        history.current.pop();
+        throw err;
+      } finally {
+        setTimeout(() => URL.revokeObjectURL(previewUrl), 100);
+      }
     },
     [setNodes, snapshot]
   );
@@ -365,16 +392,15 @@ export function StageCanvas({ sessionId, readOnly }: { sessionId: string; readOn
         x: window.innerWidth / 2,
         y: window.innerHeight / 2,
       }) ?? { x: 100, y: 100 };
-      try {
-        for (let i = 0; i < files.length; i++) {
+      for (let i = 0; i < files.length; i++) {
+        try {
           await createPhotoNode(files[i], { x: center.x + i * 260, y: center.y });
+        } catch {
+          toast.error(`Failed to upload "${files[i].name}"`);
         }
-      } catch {
-        toast.error("Failed to upload photo");
-      } finally {
-        setUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
       }
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     },
     [createPhotoNode]
   );
@@ -388,15 +414,14 @@ export function StageCanvas({ sessionId, readOnly }: { sessionId: string; readOn
       if (!files.length || !flowInstance.current) return;
       setUploading(true);
       const pos = flowInstance.current.screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      try {
-        for (let i = 0; i < files.length; i++) {
+      for (let i = 0; i < files.length; i++) {
+        try {
           await createPhotoNode(files[i], { x: pos.x + i * 260, y: pos.y });
+        } catch {
+          toast.error(`Failed to upload "${files[i].name}"`);
         }
-      } catch {
-        toast.error("Failed to upload photo");
-      } finally {
-        setUploading(false);
       }
+      setUploading(false);
     },
     [createPhotoNode]
   );
