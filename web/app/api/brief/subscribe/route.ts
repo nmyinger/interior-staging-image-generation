@@ -1,8 +1,10 @@
 // Required env var: RESEND_API_KEY
 // Optional: set RESEND_FROM_DOMAIN to your verified sending domain (default: resend.dev)
+// Optional: set LOOPS_API_KEY to enable Loops.so lifecycle automation
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { subscribeToNewsletter } from "@/lib/loops";
 
 const schema = z.object({
   email: z.string().email(),
@@ -85,6 +87,13 @@ export async function POST(req: NextRequest) {
     console.error("Failed to send welcome email", err);
     // Don't fail the request if email delivery fails
   }
+
+  // Non-blocking: add to Loops.so for lifecycle automation
+  await subscribeToNewsletter({
+    email: parsed.data.email,
+    firstName: parsed.data.name?.split(" ")[0],
+    source: "brief-page",
+  }).catch(() => {}); // already logs internally
 
   // Notify owner of new subscriber
   try {

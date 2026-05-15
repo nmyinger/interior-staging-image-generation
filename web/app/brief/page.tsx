@@ -214,6 +214,10 @@ export default function BriefPage() {
             <p className="text-xs text-stone-400 text-center">
               One email per week. No sponsored content. Unsubscribe anytime.
             </p>
+
+            <p className="text-xs text-stone-400 text-center mt-2">
+              Join 500+ real estate professionals. Unsubscribe anytime.
+            </p>
           </form>
         )}
 

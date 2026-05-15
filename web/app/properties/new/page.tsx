@@ -3,8 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { UserMenu } from "@/components/UserMenu";
+import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
 const MLS_OPTIONS = [
@@ -83,26 +90,13 @@ export default function NewPropertyPage() {
 
   return (
     <main className="min-h-screen bg-stone-50">
-      {/* Header */}
-      <header className="h-12 bg-stone-50 border-b border-stone-200 flex items-center px-4 sticky top-0 z-10">
-        <div className="flex items-center gap-2">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded bg-sage-600 flex items-center justify-center">
-              <span className="text-white text-[10px] font-bold">VS</span>
-            </div>
-            <span className="text-sm font-semibold text-stone-800">Virtual Staging</span>
-          </Link>
-          <span className="text-stone-300 mx-1">/</span>
-          <Link href="/properties" className="text-sm text-stone-500 hover:text-stone-700">
-            Properties
-          </Link>
-          <span className="text-stone-300 mx-1">/</span>
-          <span className="text-sm text-stone-600">New</span>
-        </div>
-        <div className="ml-auto">
-          <UserMenu />
-        </div>
-      </header>
+      <AppHeader breadcrumb={
+        <>
+          <Link href="/properties" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Properties</Link>
+          <span className="text-stone-300 mx-0.5">/</span>
+          <span className="text-sm text-stone-700">New</span>
+        </>
+      } />
 
       <div className="max-w-xl mx-auto px-6 py-8">
         {/* Back */}
@@ -153,18 +147,16 @@ export default function NewPropertyPage() {
             <label htmlFor="mls" className="block text-xs font-medium text-stone-600">
               MLS board <span className="text-stone-400 font-normal">(optional)</span>
             </label>
-            <select
-              id="mls"
-              value={mls}
-              onChange={(e) => setMls(e.target.value)}
-              className="w-full text-sm border border-stone-200 rounded-xl px-4 py-2.5 outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-400/20 transition-colors bg-white text-stone-700 appearance-none"
-            >
-              {MLS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+            <Select value={mls} onValueChange={(val) => setMls(val ?? "")}>
+              <SelectTrigger id="mls" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MLS_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Style brief section */}
@@ -178,18 +170,16 @@ export default function NewPropertyPage() {
               <label htmlFor="style" className="block text-xs font-medium text-stone-600">
                 Design style <span className="text-stone-400 font-normal">(optional)</span>
               </label>
-              <select
-                id="style"
-                value={style}
-                onChange={(e) => setStyle(e.target.value)}
-                className="w-full text-sm border border-stone-200 rounded-xl px-4 py-2.5 outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-400/20 transition-colors bg-white text-stone-700 appearance-none"
-              >
-                {STYLE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              <Select value={style} onValueChange={(val) => setStyle(val ?? "")}>
+                <SelectTrigger id="style" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STYLE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Color palette notes */}

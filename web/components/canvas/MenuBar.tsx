@@ -15,12 +15,12 @@ interface MenuBarProps {
 export function MenuBar({ onUpload, onAddNode, uploading, saveState }: MenuBarProps) {
   return (
     <Panel position="bottom-center">
-      <div className="flex items-center mb-6 bg-white border border-stone-200 rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.10),0_1px_4px_-1px_rgba(0,0,0,0.06)]">
+      <div className="flex items-center mb-6 bg-white border border-stone-200 rounded-xl shadow-[var(--shadow-float)]">
         <button
           onClick={onUpload}
           disabled={uploading}
           title="Upload photo"
-          className="flex items-center gap-2 px-4 py-2.5 text-stone-500 hover:text-stone-800 hover:bg-stone-50/80 disabled:opacity-40 transition-all duration-150 rounded-l-2xl select-none"
+          className="flex items-center gap-2 px-4 py-2.5 text-stone-500 hover:text-stone-800 hover:bg-stone-50/80 disabled:opacity-40 transition-all duration-150 rounded-l-xl select-none"
         >
           {uploading ? (
             <Loader2 size={15} className="animate-spin" />
@@ -35,7 +35,7 @@ export function MenuBar({ onUpload, onAddNode, uploading, saveState }: MenuBarPr
         <button
           onClick={onAddNode}
           title="Add node"
-          className="flex items-center gap-2 px-4 py-2.5 text-stone-500 hover:text-stone-800 hover:bg-stone-50/80 transition-all duration-150 rounded-r-2xl select-none"
+          className="flex items-center gap-2 px-4 py-2.5 text-stone-500 hover:text-stone-800 hover:bg-stone-50/80 transition-all duration-150 rounded-r-xl select-none"
         >
           <Plus size={15} />
           <span className="text-xs font-medium tracking-tight">Add Node</span>

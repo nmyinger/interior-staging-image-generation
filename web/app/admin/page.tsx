@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql, migrate } from "@/lib/db";
 import { redirect } from "next/navigation";
+import { AppHeader } from "@/components/AppHeader";
 
 interface OrgRow {
   id: string;
@@ -64,28 +65,6 @@ const adminLinks = [
     ),
   },
   {
-    href: "/admin/members",
-    label: "Members",
-    description: "Invite agents, assign roles, manage seats",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-stone-500">
-        <circle cx="9" cy="6" r="3" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M3 15c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    href: "/admin/brand",
-    label: "Brand Settings",
-    description: "Logo, watermark defaults, and styling preferences",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-stone-500">
-        <circle cx="9" cy="9" r="3.5" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M9 1.5V3M9 15v1.5M1.5 9H3M15 9h1.5M3.697 3.697l1.06 1.06M13.243 13.243l1.06 1.06M3.697 14.303l1.06-1.06M13.243 4.757l1.06-1.06" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
     href: "/admin/api-keys",
     label: "API Keys",
     description: "Manage API keys for batch integrations and webhooks",
@@ -93,6 +72,30 @@ const adminLinks = [
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-stone-500">
         <circle cx="6.5" cy="6.5" r="3.5" stroke="currentColor" strokeWidth="1.4" />
         <path d="M9.5 9.5L16 16M12.5 13l1.5 1.5M14.5 11l1.5 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    href: "/admin/team",
+    label: "Team",
+    description: "Manage team members, client workspaces, and access",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-stone-500">
+        <circle cx="6.5" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.4" />
+        <path d="M1.5 15c0-2.761 2.239-5 5-5s5 2.239 5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        <circle cx="13.5" cy="6" r="2" stroke="currentColor" strokeWidth="1.4" />
+        <path d="M16.5 15c0-2.209-1.343-4-3-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    href: "/admin/settings",
+    label: "Settings",
+    description: "MLS compliance rules and workspace configuration",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-stone-500">
+        <circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.4" />
+        <path d="M9 1.5v1.75M9 14.75V16.5M1.5 9h1.75M14.75 9H16.5M3.576 3.576l1.237 1.237M13.187 13.187l1.237 1.237M3.576 14.424l1.237-1.237M13.187 4.813l1.237-1.237" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -144,16 +147,7 @@ export default async function AdminPage() {
 
   return (
     <main className="min-h-screen bg-stone-50">
-      <header className="border-b border-stone-200 bg-white px-4 py-3 flex items-center gap-3">
-        <div className="w-5 h-5 rounded bg-sage-600 flex items-center justify-center">
-          <span className="text-white text-[10px] font-bold">VS</span>
-        </div>
-        <span className="text-sm font-semibold text-stone-800">
-          Virtual Staging
-        </span>
-        <span className="text-stone-300 text-sm">/</span>
-        <span className="text-sm text-stone-500">Admin</span>
-      </header>
+      <AppHeader breadcrumb={<span className="text-sm text-stone-500">Admin</span>} />
 
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         {/* Org header */}

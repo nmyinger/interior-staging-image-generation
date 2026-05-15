@@ -8,14 +8,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { SessionContext } from "./SessionContext";
 import type { GenerationNodeData, NodeStatus } from "@/types/nodes";
 import { DEFAULT_MODEL_ID } from "@/lib/models";
+import { StatusDot } from "@/components/ui/status-dot";
+import type { StatusDotTone } from "@/components/ui/status-dot";
 
-function StatusDot({ status }: { status: NodeStatus }) {
-  const cls =
-    status === "done" ? "bg-moss-500"
-    : status === "generating" ? "bg-acacia-400 animate-pulse"
-    : status === "error" ? "bg-clay-400"
-    : "bg-stone-300";
-  return <div className={`w-2 h-2 rounded-full shrink-0 ${cls}`} />;
+function statusTone(status: NodeStatus): StatusDotTone {
+  if (status === "done") return "moss";
+  if (status === "generating") return "acacia";
+  if (status === "error") return "clay";
+  return "stone";
 }
 
 const HANDLE_BASE_STYLE = { top: "30%" };
@@ -77,7 +77,7 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
   return (
     <div className={`bg-white border-2 ${selected ? "border-sage-500 ring-2 ring-sage-200" : "border-sage-200"} rounded-[var(--radius-node)] shadow-sm w-64 overflow-hidden transition-[border-color,box-shadow]`}>
       <div className="px-3 py-2 bg-sage-50 border-b border-sage-200 flex items-center">
-        <StatusDot status={status} />
+        <StatusDot tone={statusTone(status)} pulse={status === "generating"} />
       </div>
 
       <Handle
