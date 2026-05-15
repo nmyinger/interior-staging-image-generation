@@ -150,24 +150,23 @@ function TierCard({
 
   return (
     <Card
-      className={`relative flex flex-col transition-shadow ${
+      className={`flex flex-col transition-shadow ${
         isCurrent ? "ring-2 ring-sage-500 shadow-sm" : "hover:shadow-sm"
       }`}
     >
-      {isCurrent && (
-        <div className="absolute -top-3 left-4">
-          <Badge className="bg-sage-500 text-white border-0 text-xs px-2 py-0.5">
-            Current plan
-          </Badge>
-        </div>
-      )}
-
       <CardHeader className="pt-5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <CardTitle className="text-base font-semibold text-stone-800">
-              {config.name}
-            </CardTitle>
+            <div className="flex items-center gap-2 flex-wrap">
+              <CardTitle className="text-base font-semibold text-stone-800">
+                {config.name}
+              </CardTitle>
+              {isCurrent && (
+                <Badge className="bg-sage-500 text-white border-0 text-xs px-2 py-0.5">
+                  Current plan
+                </Badge>
+              )}
+            </div>
             <CardDescription className="text-xs mt-0.5">
               {prices.tagline}
             </CardDescription>
