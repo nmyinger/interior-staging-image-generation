@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Upload, Star, ImageIcon } from "lucide-react";
+import { Upload, Star, ImageIcon, Trash2 } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 export interface PropertyPhoto {
   id: string;
@@ -41,6 +42,17 @@ export function PhotoUploadGrid({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+
+  async function removePhoto(photoId: string) {
+    const res = await fetch(`/api/properties/${propertyId}/photos`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ photoId }),
+    });
+    if (res.ok) {
+      onPhotosChange(photos.filter((p) => p.id !== photoId));
+    }
+  }
 
   async function uploadFiles(files: FileList) {
     if (!files.length) return;
@@ -143,7 +155,7 @@ export function PhotoUploadGrid({
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4">
           {photos.map((photo) => (
-            <PhotoCard key={photo.id} photo={photo} />
+            <PhotoCard key={photo.id} photo={photo} onRemove={removePhoto} />
           ))}
         </div>
       )}
@@ -151,7 +163,7 @@ export function PhotoUploadGrid({
   );
 }
 
-function PhotoCard({ photo }: { photo: PropertyPhoto }) {
+function PhotoCard({ photo, onRemove }: { photo: PropertyPhoto; onRemove: (id: string) => void }) {
   const imageUrl = photo.stagedUrl ?? photo.image_url ?? photo.original_url;
 
   return (
@@ -179,6 +191,23 @@ function PhotoCard({ photo }: { photo: PropertyPhoto }) {
               Hero
             </span>
           )}
+        </div>
+
+        {/* Remove button */}
+        <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  onClick={() => onRemove(photo.id)}
+                  className="flex items-center justify-center w-6 h-6 rounded-md bg-white/90 border border-stone-200 text-stone-400 hover:text-clay-600 hover:border-clay-300 hover:bg-clay-50 backdrop-blur-sm transition-colors"
+                >
+                  <Trash2 size={11} />
+                </button>
+              }
+            />
+            <TooltipContent>Remove photo</TooltipContent>
+          </Tooltip>
         </div>
 
         {/* Staged indicator overlay */}

@@ -108,42 +108,34 @@ function PropertyCard({ property }: { property: PropertyRow }) {
   });
 
   return (
-    <div className="bg-white rounded-xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all p-5 flex items-start gap-4">
-      {/* Left: meta */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start gap-3 flex-wrap">
-          <h2 className="text-sm font-semibold text-stone-800">{property.name}</h2>
-          <StatusBadge status={property.status} />
-          {property.mls && (
-            <span className="inline-flex items-center gap-1 text-[11px] text-acacia-500 bg-acacia-100 border border-acacia-200 rounded-full px-2 py-0.5 font-medium">
-              {property.mls}
-            </span>
-          )}
-        </div>
-
-        {property.address && (
-          <p className="flex items-center gap-1 text-xs text-stone-400 mt-1.5">
-            <MapPin size={11} className="shrink-0" />
-            {property.address}
-          </p>
-        )}
-
-        <div className="flex items-center gap-4 mt-2">
-          <span className="flex items-center gap-1 text-[11px] text-stone-400">
-            <ImageIcon size={11} />
-            {property.photo_count} photo{property.photo_count !== 1 ? "s" : ""}
+    <Link
+      href={`/properties/${property.id}`}
+      className="block bg-white rounded-xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all p-5"
+    >
+      <div className="flex items-start gap-3 flex-wrap">
+        <h2 className="text-sm font-semibold text-stone-800">{property.name}</h2>
+        <StatusBadge status={property.status} />
+        {property.mls && (
+          <span className="inline-flex items-center gap-1 text-[11px] text-acacia-500 bg-acacia-100 border border-acacia-200 rounded-full px-2 py-0.5 font-medium">
+            {property.mls}
           </span>
-          <span className="text-[11px] text-stone-400">{date}</span>
-        </div>
+        )}
       </div>
 
-      {/* Right: action */}
-      <Link
-        href={`/properties/${property.id}`}
-        className="shrink-0 text-xs font-medium text-sage-700 bg-sage-50 hover:bg-sage-100 border border-sage-200 rounded-lg px-3 py-2 transition-colors"
-      >
-        Open
-      </Link>
-    </div>
+      {property.address && (
+        <p className="flex items-center gap-1 text-xs text-stone-400 mt-1.5">
+          <MapPin size={11} className="shrink-0" />
+          {property.address}
+        </p>
+      )}
+
+      <div className="flex items-center gap-4 mt-2">
+        <span className="flex items-center gap-1 text-[11px] text-stone-400">
+          <ImageIcon size={11} />
+          {property.photo_count} photo{property.photo_count !== 1 ? "s" : ""}
+        </span>
+        <span className="text-[11px] text-stone-400">{date}</span>
+      </div>
+    </Link>
   );
 }

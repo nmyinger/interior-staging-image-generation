@@ -18,6 +18,37 @@ async function resolveProperty(propertyId: string, uid: string) {
   return rows[0] ?? null;
 }
 
+// DELETE /api/properties/[id]/photos — remove a photo from this property
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  const uid = getUid(session);
+  if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const { id: propertyId } = await params;
+    const property = await resolveProperty(propertyId, uid);
+    if (!property) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const body = await req.json();
+    const photoId: string | undefined = body.photoId;
+    if (!photoId) return NextResponse.json({ error: "photoId is required" }, { status: 400 });
+
+    await sql`
+      DELETE FROM property_photos
+      WHERE id = ${photoId} AND property_id = ${propertyId}
+    `;
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[DELETE /api/properties/[id]/photos]", message);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
 // POST /api/properties/[id]/photos — add a photo (already in photos table) to this property
 export async function POST(
   req: NextRequest,

@@ -594,28 +594,21 @@ export default function PropertyDetailPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {canvases.map((canvas) => (
-                <div
+                <Link
                   key={canvas.id}
-                  className="bg-white rounded-xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all p-4 flex items-center justify-between gap-3"
+                  href={`/canvas/${canvas.id}`}
+                  className="flex items-center gap-3 bg-white rounded-xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all p-4 min-w-0"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-sage-50 border border-sage-200 flex items-center justify-center shrink-0">
-                      <Frame size={14} className="text-sage-600" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-stone-800 truncate">{canvas.name}</p>
-                      <p className="text-[11px] text-stone-400">
-                        {new Date(canvas.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                      </p>
-                    </div>
+                  <div className="w-8 h-8 rounded-lg bg-sage-50 border border-sage-200 flex items-center justify-center shrink-0">
+                    <Frame size={14} className="text-sage-600" />
                   </div>
-                  <Link
-                    href={`/canvas/${canvas.id}`}
-                    className="shrink-0 text-xs font-medium text-sage-700 bg-sage-50 hover:bg-sage-100 border border-sage-200 rounded-lg px-3 py-1.5 transition-colors"
-                  >
-                    Open
-                  </Link>
-                </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-stone-800 truncate">{canvas.name}</p>
+                    <p className="text-[11px] text-stone-400">
+                      {new Date(canvas.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </p>
+                  </div>
+                </Link>
               ))}
             </div>
           )}
