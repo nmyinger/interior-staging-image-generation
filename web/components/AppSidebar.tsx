@@ -22,7 +22,7 @@ interface NavItem {
 }
 
 const WORKSPACE_NAV: NavItem[] = [
-  { href: "/", label: "Sessions", icon: LayoutDashboard, exact: true },
+  { href: "/sessions", label: "Sessions", icon: LayoutDashboard },
   { href: "/properties", label: "Properties", icon: Building2 },
 ];
 

@@ -52,12 +52,6 @@ export default async function PropertiesPage() {
   return (
     <div>
       <div className="max-w-4xl mx-auto px-6 py-8">
-        {/* Tab strip */}
-        <div className="flex items-center gap-6 border-b border-stone-200 mb-6">
-          <Link href="/" className="text-sm text-stone-400 hover:text-stone-600 pb-2.5 border-b-2 border-transparent -mb-px transition-colors">Sessions</Link>
-          <span className="text-sm font-medium text-stone-900 pb-2.5 border-b-2 border-stone-900 -mb-px">Properties</span>
-        </div>
-
         {/* Page header */}
         <div className="flex items-center justify-between mb-6">
           <div>
