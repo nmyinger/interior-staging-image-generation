@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, Copy, Check, Trash2, Loader2, Lock } from "lucide-react";
+import { Copy, Check, Trash2, Loader2, Lock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectTrigger,
@@ -10,6 +11,13 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogClose,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Invite {
   email: string;
@@ -120,18 +128,17 @@ export function ShareModal({ sessionId, onClose }: ShareModalProps) {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
-      <div
-        className="bg-white rounded-xl shadow-xl w-[440px] max-h-[85vh] flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent
+        className="sm:max-w-[440px] max-h-[85vh] p-0 gap-0 overflow-hidden"
+        showCloseButton={false}
       >
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-stone-200 flex items-center justify-between shrink-0">
-          <h2 className="text-sm font-semibold text-stone-800">Share session</h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 transition-colors p-1 rounded">
+        <DialogHeader className="flex-row items-center justify-between px-5 py-4 border-b border-stone-200 gap-0 shrink-0">
+          <DialogTitle className="text-sm font-semibold text-stone-800">Share session</DialogTitle>
+          <DialogClose className="text-stone-400 hover:text-stone-600 transition-colors p-1 rounded">
             <X size={15} />
-          </button>
-        </div>
+          </DialogClose>
+        </DialogHeader>
 
         {loading ? (
           <div className="flex-1 flex items-center justify-center py-10">
@@ -183,19 +190,19 @@ export function ShareModal({ sessionId, onClose }: ShareModalProps) {
                   </label>
                   {passwordEnabled && (
                     <div className="flex gap-2 pl-6">
-                      <input
+                      <Input
                         type="password"
                         value={passwordInput}
                         onChange={e => setPasswordInput(e.target.value)}
                         onKeyDown={e => e.key === "Enter" && handleSetPassword()}
                         placeholder={hasPassword ? "Change password…" : "Set password…"}
-                        className="flex-1 text-xs border border-stone-200 rounded-lg px-3 py-2 outline-none focus:border-sage-400 transition-colors"
+                        className="flex-1 text-xs"
                       />
                       <Button
                         size="sm"
                         onClick={handleSetPassword}
                         disabled={!passwordInput.trim()}
-                        className="text-white bg-sage-600 hover:bg-sage-700 shrink-0 text-xs"
+                        className="shrink-0 text-xs"
                       >
                         {passwordSaved ? "Saved!" : "Set"}
                       </Button>
@@ -220,13 +227,13 @@ export function ShareModal({ sessionId, onClose }: ShareModalProps) {
             <div className="px-5 py-4 space-y-3">
               <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">Invite people</p>
               <div className="flex gap-2">
-                <input
+                <Input
                   type="email"
                   value={emailInput}
                   onChange={e => setEmailInput(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleAddInvite()}
                   placeholder="email@example.com"
-                  className="flex-1 min-w-0 text-xs border border-stone-200 rounded-lg px-3 py-2 outline-none focus:border-sage-400 transition-colors"
+                  className="flex-1 min-w-0 text-xs"
                 />
                 <Select
                   value={inviteRole}
@@ -244,7 +251,7 @@ export function ShareModal({ sessionId, onClose }: ShareModalProps) {
                   size="sm"
                   onClick={handleAddInvite}
                   disabled={!emailInput.trim() || inviting}
-                  className="text-white bg-sage-600 hover:bg-sage-700 shrink-0"
+                  className="shrink-0"
                 >
                   {inviting ? <Loader2 size={12} className="animate-spin" /> : "Invite"}
                 </Button>
@@ -274,7 +281,7 @@ export function ShareModal({ sessionId, onClose }: ShareModalProps) {
             </div>
           </div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

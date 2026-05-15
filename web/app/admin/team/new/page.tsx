@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -66,40 +68,33 @@ export default function NewClientWorkspacePage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Workspace name */}
-          <div>
-            <label
-              htmlFor="name"
-              className="block text-sm font-medium text-stone-700 mb-1.5"
-            >
+          <div className="space-y-1.5">
+            <Label htmlFor="name">
               Workspace name <span className="text-clay-500">*</span>
-            </label>
-            <input
+            </Label>
+            <Input
               id="name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder='e.g. "The Smith Team" or "Jane Miller"'
               required
-              className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-sage-400 focus:border-transparent transition"
+              className="h-9"
             />
           </div>
 
           {/* Client email (optional) */}
-          <div>
-            <label
-              htmlFor="clientEmail"
-              className="block text-sm font-medium text-stone-700 mb-1.5"
-            >
-              Client email{" "}
-              <span className="text-xs font-normal text-stone-400">(optional)</span>
-            </label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="clientEmail">
+              Client email <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Input
               id="clientEmail"
               type="email"
               value={clientEmail}
               onChange={(e) => setClientEmail(e.target.value)}
               placeholder="agent@example.com"
-              className="w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-sage-400 focus:border-transparent transition"
+              className="h-9"
             />
             <p className="text-xs text-stone-400 mt-1.5">
               If provided, they&apos;ll be added as workspace owner and can access it after signing in.

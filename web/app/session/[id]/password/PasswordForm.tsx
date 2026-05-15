@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Lock, Loader2 } from "lucide-react";
 
 export function PasswordForm({ sessionId }: { sessionId: string }) {
@@ -47,12 +48,11 @@ export function PasswordForm({ sessionId }: { sessionId: string }) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
-          <input
+          <Input
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
             placeholder="Password"
-            className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2.5 outline-none focus:border-sage-400 transition-colors"
             autoFocus
           />
           {error && <p className="text-xs text-clay-500">{error}</p>}

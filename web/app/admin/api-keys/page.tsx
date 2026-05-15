@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { AppHeader } from "@/components/AppHeader";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -190,18 +192,18 @@ export default function ApiKeysPage() {
         {/* Create button / inline form */}
         <div>
           {!showCreateForm ? (
-            <button
+            <Button
               onClick={() => {
                 setShowCreateForm(true);
                 setCreateError(null);
               }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sage-600 text-white text-sm font-semibold hover:bg-sage-700 transition-colors"
+              size="sm"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M7 1.5v11M1.5 7h11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
               Create API Key
-            </button>
+            </Button>
           ) : (
             <form
               onSubmit={handleCreate}
@@ -209,33 +211,34 @@ export default function ApiKeysPage() {
             >
               <p className="text-sm font-semibold text-stone-700">New API Key</p>
               <div className="flex items-center gap-3">
-                <input
+                <Input
                   type="text"
                   value={newKeyName}
                   onChange={(e) => setNewKeyName(e.target.value)}
                   placeholder="Key name (e.g. Lightroom Workflow)"
                   maxLength={100}
-                  className="flex-1 text-sm border border-stone-200 rounded-lg px-3 py-2 text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-sage-300 focus:border-sage-400 transition"
                   autoFocus
+                  className="flex-1"
                 />
-                <button
+                <Button
                   type="submit"
+                  size="sm"
                   disabled={creating || !newKeyName.trim()}
-                  className="px-4 py-2 rounded-lg bg-sage-600 text-white text-sm font-semibold hover:bg-sage-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {creating ? "Creating…" : "Create"}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => {
                     setShowCreateForm(false);
                     setNewKeyName("");
                     setCreateError(null);
                   }}
-                  className="px-4 py-2 rounded-lg border border-stone-200 text-sm text-stone-500 hover:text-stone-700 hover:border-stone-300 transition-colors"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
               {createError && (
                 <p className="text-xs text-clay-500">{createError}</p>

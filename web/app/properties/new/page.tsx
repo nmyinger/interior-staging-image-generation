@@ -12,6 +12,9 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Loader2 } from "lucide-react";
 
 const MLS_OPTIONS = [
@@ -113,40 +116,38 @@ export default function NewPropertyPage() {
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Name */}
           <div className="space-y-1.5">
-            <label htmlFor="name" className="block text-xs font-medium text-stone-600">
+            <Label htmlFor="name">
               Property name <span className="text-clay-500">*</span>
-            </label>
-            <input
+            </Label>
+            <Input
               id="name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="123 Oak Street — Bedroom staging"
               required
-              className="w-full text-sm border border-stone-200 rounded-xl px-4 py-2.5 outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-400/20 transition-colors bg-white"
             />
           </div>
 
           {/* Address */}
           <div className="space-y-1.5">
-            <label htmlFor="address" className="block text-xs font-medium text-stone-600">
-              Address <span className="text-stone-400 font-normal">(optional)</span>
-            </label>
-            <input
+            <Label htmlFor="address">
+              Address <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <Input
               id="address"
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder="123 Oak Street, Austin, TX 78701"
-              className="w-full text-sm border border-stone-200 rounded-xl px-4 py-2.5 outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-400/20 transition-colors bg-white"
             />
           </div>
 
           {/* MLS */}
           <div className="space-y-1.5">
-            <label htmlFor="mls" className="block text-xs font-medium text-stone-600">
-              MLS board <span className="text-stone-400 font-normal">(optional)</span>
-            </label>
+            <Label htmlFor="mls">
+              MLS board <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
             <Select value={mls} onValueChange={(val) => setMls(val ?? "")}>
               <SelectTrigger id="mls" className="w-full">
                 <SelectValue />
@@ -167,9 +168,9 @@ export default function NewPropertyPage() {
 
             {/* Style selector */}
             <div className="space-y-1.5 mb-4">
-              <label htmlFor="style" className="block text-xs font-medium text-stone-600">
-                Design style <span className="text-stone-400 font-normal">(optional)</span>
-              </label>
+              <Label htmlFor="style">
+                Design style <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
               <Select value={style} onValueChange={(val) => setStyle(val ?? "")}>
                 <SelectTrigger id="style" className="w-full">
                   <SelectValue />
@@ -184,31 +185,31 @@ export default function NewPropertyPage() {
 
             {/* Color palette notes */}
             <div className="space-y-1.5 mb-4">
-              <label htmlFor="color-notes" className="block text-xs font-medium text-stone-600">
-                Color palette notes <span className="text-stone-400 font-normal">(optional)</span>
-              </label>
-              <textarea
+              <Label htmlFor="color-notes">
+                Color palette notes <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Textarea
                 id="color-notes"
                 value={colorNotes}
                 onChange={(e) => setColorNotes(e.target.value)}
                 placeholder="e.g. Warm whites, greige tones, natural wood accents…"
                 rows={2}
-                className="w-full text-sm border border-stone-200 rounded-xl px-4 py-2.5 outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-400/20 transition-colors bg-white resize-none"
+                className="resize-none text-sm"
               />
             </div>
 
             {/* Additional notes */}
             <div className="space-y-1.5">
-              <label htmlFor="additional-notes" className="block text-xs font-medium text-stone-600">
-                Additional notes <span className="text-stone-400 font-normal">(optional)</span>
-              </label>
-              <textarea
+              <Label htmlFor="additional-notes">
+                Additional notes <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Textarea
                 id="additional-notes"
                 value={additionalNotes}
                 onChange={(e) => setAdditionalNotes(e.target.value)}
                 placeholder="Any specific furniture, layout preferences, or style constraints…"
                 rows={3}
-                className="w-full text-sm border border-stone-200 rounded-xl px-4 py-2.5 outline-none focus:border-sage-400 focus:ring-2 focus:ring-sage-400/20 transition-colors bg-white resize-none"
+                className="resize-none text-sm"
               />
             </div>
           </div>

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 function getNextTuesday(): string {
   const now = new Date();
@@ -182,30 +184,30 @@ export default function BriefPage() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
             <div className="flex flex-col sm:flex-row gap-3">
-              <input
+              <Input
                 type="text"
                 placeholder="First name (optional)"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="flex-1 h-11 px-4 rounded-lg border border-stone-200 bg-white text-stone-800 text-sm placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-sage-400 focus:border-transparent"
+                className="flex-1 h-11"
               />
-              <input
+              <Input
                 type="email"
                 placeholder="you@brokerage.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="flex-[2] h-11 px-4 rounded-lg border border-stone-200 bg-white text-stone-800 text-sm placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-sage-400 focus:border-transparent"
+                className="flex-[2] h-11"
               />
             </div>
 
-            <button
+            <Button
               type="submit"
               disabled={status === "loading" || !email}
-              className="w-full h-11 rounded-lg bg-sage-600 text-white text-sm font-semibold hover:bg-sage-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full h-11"
             >
               {status === "loading" ? "Subscribing..." : "Subscribe — it's free"}
-            </button>
+            </Button>
 
             {status === "error" && (
               <p className="text-xs text-clay-500 text-center">{errorMsg}</p>

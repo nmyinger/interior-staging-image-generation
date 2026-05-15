@@ -18,6 +18,9 @@ import type { PropertyPhoto } from "@/components/properties/PhotoUploadGrid";
 import { BatchProgress } from "@/components/properties/BatchProgress";
 import type { BatchItem } from "@/components/properties/BatchProgress";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   ArrowLeft,
   Loader2,
@@ -339,9 +342,7 @@ export default function PropertyDetailPage() {
               <div className="p-4 space-y-4">
                 {/* Style */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-stone-500">
-                    Design style
-                  </label>
+                  <Label>Design style</Label>
                   <Select value={style} onValueChange={(val) => setStyle(val ?? "")}>
                     <SelectTrigger className="w-full">
                       <SelectValue />
@@ -356,35 +357,31 @@ export default function PropertyDetailPage() {
 
                 {/* Color palette notes */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-stone-500">
-                    Color palette
-                  </label>
-                  <textarea
+                  <Label>Color palette</Label>
+                  <Textarea
                     value={colorNotes}
                     onChange={(e) => setColorNotes(e.target.value)}
                     placeholder="Warm whites, greige tones, natural wood…"
                     rows={2}
-                    className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 outline-none focus:border-sage-400 transition-colors bg-white resize-none"
+                    className="resize-none text-sm"
                   />
                 </div>
 
                 {/* Additional notes */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-stone-500">
-                    Additional notes
-                  </label>
-                  <textarea
+                  <Label>Additional notes</Label>
+                  <Textarea
                     value={additionalNotes}
                     onChange={(e) => setAdditionalNotes(e.target.value)}
                     placeholder="Furniture preferences, layout constraints…"
                     rows={3}
-                    className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 outline-none focus:border-sage-400 transition-colors bg-white resize-none"
+                    className="resize-none text-sm"
                   />
                 </div>
 
                 {/* MLS selector */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-stone-500">MLS board</label>
+                  <Label>MLS board</Label>
                   <Select
                     value={property.mls ?? ""}
                     onValueChange={async (val) => {

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,7 +31,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-screen overflow-hidden antialiased`}
     >
       <body className="h-full flex flex-col">
-        <AuthProvider>{children}</AuthProvider>
+        <TooltipProvider>
+          <AuthProvider>{children}</AuthProvider>
+          <Toaster richColors position="bottom-right" />
+        </TooltipProvider>
       </body>
     </html>
   );
