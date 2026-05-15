@@ -1,6 +1,7 @@
 import GoogleProvider from "next-auth/providers/google";
 import type { NextAuthOptions } from "next-auth";
 import { sql, migrate } from "@/lib/db";
+import { provisionPersonalOrg } from "@/lib/orgs";
 
 let migrationDone = false;
 async function ensureMigrated() {
@@ -34,6 +35,20 @@ export const authOptions: NextAuthOptions = {
             name  = EXCLUDED.name,
             image = EXCLUDED.image
         `;
+
+        // Auto-provision a personal org for new users (and any existing user
+        // who signed up before this was in place). Guarded inside
+        // provisionPersonalOrg so concurrent sign-ins don't race.
+        const userRows = await sql`
+          SELECT default_org_id FROM users WHERE id = ${profile.sub}
+        `;
+        if (!userRows[0]?.default_org_id) {
+          await provisionPersonalOrg({
+            userId: profile.sub,
+            userName: (profile as { name?: string }).name ?? "",
+            userEmail: profile.email,
+          });
+        }
       }
       return true;
     },

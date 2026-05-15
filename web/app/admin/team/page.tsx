@@ -1,7 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql, migrate } from "@/lib/db";
-import { AppHeader } from "@/components/AppHeader";
 import { listSubAccounts, getUserOrg } from "@/lib/orgs";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -60,15 +59,7 @@ export default async function TeamPage() {
   };
 
   return (
-    <main className="min-h-screen bg-stone-50">
-      <AppHeader breadcrumb={
-        <>
-          <Link href="/admin" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Admin</Link>
-          <span className="text-stone-300 mx-0.5">/</span>
-          <span className="text-sm text-stone-700">Team &amp; Clients</span>
-        </>
-      } />
-
+    <div>
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-10">
         {/* Page title + action */}
         <div className="flex items-center justify-between">
@@ -211,25 +202,7 @@ export default async function TeamPage() {
           )}
         </section>
 
-        {/* Back link */}
-        <div className="pt-2">
-          <Link
-            href="/admin"
-            className="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-stone-600 transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path
-                d="M9 2.5L4.5 7L9 11.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Back to Admin
-          </Link>
-        </div>
       </div>
-    </main>
+    </div>
   );
 }

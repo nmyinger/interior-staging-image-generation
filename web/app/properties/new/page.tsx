@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -92,15 +91,7 @@ export default function NewPropertyPage() {
   }
 
   return (
-    <main className="min-h-screen bg-stone-50">
-      <AppHeader breadcrumb={
-        <>
-          <Link href="/properties" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Properties</Link>
-          <span className="text-stone-300 mx-0.5">/</span>
-          <span className="text-sm text-stone-700">New</span>
-        </>
-      } />
-
+    <div>
       <div className="max-w-xl mx-auto px-6 py-8">
         {/* Back */}
         <Link
@@ -240,6 +231,6 @@ export default function NewPropertyPage() {
           </div>
         </form>
       </div>
-    </main>
+    </div>
   );
 }

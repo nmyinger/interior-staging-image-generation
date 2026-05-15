@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AppHeader } from "@/components/AppHeader";
 
 interface MlsRule {
   code: string;
@@ -85,19 +84,12 @@ export default function OrgSettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-stone-50">
-      <AppHeader breadcrumb={
-        <>
-          <a href="/admin" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Admin</a>
-          <span className="text-stone-300 mx-0.5">/</span>
-          <span className="text-sm text-stone-700">Settings</span>
-        </>
-      } />
-
+    <div>
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         {/* Page heading */}
         <div>
-          <h1 className="text-2xl font-bold text-stone-800">Workspace Settings</h1>
+          <h1 className="text-xl font-semibold text-stone-800">Settings</h1>
+          <p className="text-sm text-stone-500 mt-0.5">MLS compliance and workspace configuration</p>
         </div>
 
         {/* MLS Compliance section */}
@@ -225,25 +217,7 @@ export default function OrgSettingsPage() {
           )}
         </div>
 
-        {/* Back link */}
-        <div className="pt-2">
-          <a
-            href="/admin"
-            className="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-stone-600 transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path
-                d="M9 2.5L4.5 7L9 11.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Back to admin
-          </a>
-        </div>
       </div>
-    </main>
+    </div>
   );
 }

@@ -1,7 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql, migrate } from "@/lib/db";
-import { AppHeader } from "@/components/AppHeader";
 import { getUserOrg } from "@/lib/orgs";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
@@ -103,17 +102,7 @@ export default async function ClientWorkspaceDetailPage({
   };
 
   return (
-    <main className="min-h-screen bg-stone-50">
-      <AppHeader breadcrumb={
-        <>
-          <Link href="/admin" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Admin</Link>
-          <span className="text-stone-300 mx-0.5">/</span>
-          <Link href="/admin/team" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Team</Link>
-          <span className="text-stone-300 mx-0.5">/</span>
-          <span className="text-sm text-stone-700 truncate max-w-[200px]">{child.name}</span>
-        </>
-      } />
-
+    <div>
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         {/* Workspace header */}
         <div className="bg-white border border-stone-200 rounded-lg p-5">
@@ -215,25 +204,7 @@ export default async function ClientWorkspaceDetailPage({
           )}
         </section>
 
-        {/* Back link */}
-        <div className="pt-2">
-          <Link
-            href="/admin/team"
-            className="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-stone-600 transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path
-                d="M9 2.5L4.5 7L9 11.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Back to Team
-          </Link>
-        </div>
       </div>
-    </main>
+    </div>
   );
 }

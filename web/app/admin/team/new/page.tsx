@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { AppHeader } from "@/components/AppHeader";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
@@ -13,6 +12,7 @@ export default function NewClientWorkspacePage() {
   const [clientEmail, setClientEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsUpgrade, setNeedsUpgrade] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -20,6 +20,7 @@ export default function NewClientWorkspacePage() {
 
     setSubmitting(true);
     setError(null);
+    setNeedsUpgrade(false);
 
     try {
       const res = await fetch("/api/admin/team", {
@@ -33,7 +34,12 @@ export default function NewClientWorkspacePage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError((body as { error?: string }).error ?? "Something went wrong. Please try again.");
+        const msg = (body as { error?: string }).error ?? "Something went wrong. Please try again.";
+        if (msg.toLowerCase().includes("studio or brokerage")) {
+          setNeedsUpgrade(true);
+        } else {
+          setError(msg);
+        }
         return;
       }
 
@@ -47,17 +53,7 @@ export default function NewClientWorkspacePage() {
   }
 
   return (
-    <main className="min-h-screen bg-stone-50">
-      <AppHeader breadcrumb={
-        <>
-          <Link href="/admin" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Admin</Link>
-          <span className="text-stone-300 mx-0.5">/</span>
-          <Link href="/admin/team" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Team</Link>
-          <span className="text-stone-300 mx-0.5">/</span>
-          <span className="text-sm text-stone-700">New Workspace</span>
-        </>
-      } />
-
+    <div>
       <div className="max-w-lg mx-auto px-4 py-12">
         <div className="mb-8">
           <h1 className="text-xl font-bold text-stone-800">New Client Workspace</h1>
@@ -100,6 +96,19 @@ export default function NewClientWorkspacePage() {
               If provided, they&apos;ll be added as workspace owner and can access it after signing in.
             </p>
           </div>
+
+          {/* Tier gate */}
+          {needsUpgrade && (
+            <div className="rounded-lg bg-acacia-100 border border-acacia-200 px-4 py-3 space-y-1">
+              <p className="text-sm font-medium text-stone-700">Studio or Brokerage plan required</p>
+              <p className="text-xs text-stone-500">
+                Client workspaces are available on Studio ($149/mo) and Brokerage ($399/mo) plans.{" "}
+                <Link href="/admin/billing" className="text-sage-700 hover:text-sage-900 underline underline-offset-2">
+                  Upgrade your plan →
+                </Link>
+              </p>
+            </div>
+          )}
 
           {/* Error */}
           {error && (
@@ -173,6 +182,6 @@ export default function NewClientWorkspacePage() {
           </ul>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

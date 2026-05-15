@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { AppHeader } from "@/components/AppHeader";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -138,19 +137,11 @@ export default function ApiKeysPage() {
   // Render
   // -------------------------------------------------------------------------
   return (
-    <main className="min-h-screen bg-stone-50">
-      <AppHeader breadcrumb={
-        <>
-          <a href="/admin" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Admin</a>
-          <span className="text-stone-300 mx-0.5">/</span>
-          <span className="text-sm text-stone-700">API Keys</span>
-        </>
-      } />
-
+    <div>
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         {/* Page title */}
         <div>
-          <h1 className="text-2xl font-bold text-stone-800">API Keys</h1>
+          <h1 className="text-xl font-semibold text-stone-800">API Keys</h1>
           <p className="text-sm text-stone-400 mt-1">
             Use API keys to integrate with your delivery platform or Lightroom workflow.
           </p>
@@ -311,25 +302,7 @@ export default function ApiKeysPage() {
           )}
         </div>
 
-        {/* Back nav */}
-        <div className="pt-2">
-          <a
-            href="/admin"
-            className="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-stone-600 transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path
-                d="M9 2.5L4.5 7L9 11.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Back to Admin
-          </a>
-        </div>
       </div>
-    </main>
+    </div>
   );
 }

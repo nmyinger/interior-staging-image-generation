@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { AppHeader } from "@/components/AppHeader";
 import {
   Select,
   SelectTrigger,
@@ -256,14 +255,7 @@ export default function PropertyDetailPage() {
   }
 
   return (
-    <main className="min-h-screen bg-stone-50">
-      <AppHeader breadcrumb={
-        <>
-          <Link href="/properties" className="text-sm text-stone-500 hover:text-stone-700 transition-colors shrink-0">Properties</Link>
-          <span className="text-stone-300 mx-0.5">/</span>
-          <span className="text-sm text-stone-700 truncate max-w-[200px]">{property.name}</span>
-        </>
-      } />
+    <div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         {/* Back link */}
@@ -537,6 +529,6 @@ export default function PropertyDetailPage() {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

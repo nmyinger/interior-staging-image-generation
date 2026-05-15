@@ -2,7 +2,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql, migrate } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { AppHeader } from "@/components/AppHeader";
 
 interface OrgRow {
   id: string;
@@ -40,66 +39,6 @@ const statusColors: Record<string, string> = {
   past_due: "bg-clay-400/10 text-clay-500",
 };
 
-const adminLinks = [
-  {
-    href: "/admin/compliance",
-    label: "Compliance",
-    description: "Audit disclosure links and staged photo records",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-sage-600">
-        <rect x="2" y="2" width="14" height="14" rx="3" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M5.5 9l2.5 2.5L12.5 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-  {
-    href: "/admin/billing",
-    label: "Billing",
-    description: "Manage subscription, invoices, and payment method",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-stone-500">
-        <rect x="1.5" y="4" width="15" height="10" rx="2" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M1.5 7.5h15" stroke="currentColor" strokeWidth="1.4" />
-        <rect x="4" y="10" width="4" height="1.5" rx="0.75" fill="currentColor" />
-      </svg>
-    ),
-  },
-  {
-    href: "/admin/api-keys",
-    label: "API Keys",
-    description: "Manage API keys for batch integrations and webhooks",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-stone-500">
-        <circle cx="6.5" cy="6.5" r="3.5" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M9.5 9.5L16 16M12.5 13l1.5 1.5M14.5 11l1.5 1.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    href: "/admin/team",
-    label: "Team",
-    description: "Manage team members, client workspaces, and access",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-stone-500">
-        <circle cx="6.5" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M1.5 15c0-2.761 2.239-5 5-5s5 2.239 5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-        <circle cx="13.5" cy="6" r="2" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M16.5 15c0-2.209-1.343-4-3-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    href: "/admin/settings",
-    label: "Settings",
-    description: "MLS compliance rules and workspace configuration",
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-stone-500">
-        <circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.4" />
-        <path d="M9 1.5v1.75M9 14.75V16.5M1.5 9h1.75M14.75 9H16.5M3.576 3.576l1.237 1.237M13.187 13.187l1.237 1.237M3.576 14.424l1.237-1.237M13.187 4.813l1.237-1.237" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-];
 
 export default async function AdminPage() {
   await migrate();
@@ -146,9 +85,7 @@ export default async function AdminPage() {
   const userName = session.user.name ?? session.user.email ?? "there";
 
   return (
-    <main className="min-h-screen bg-stone-50">
-      <AppHeader breadcrumb={<span className="text-sm text-stone-500">Admin</span>} />
-
+    <div>
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-8">
         {/* Org header */}
         <div>
@@ -191,68 +128,7 @@ export default async function AdminPage() {
           </div>
         )}
 
-        {/* Nav grid */}
-        <nav>
-          <h2 className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-4">
-            Settings &amp; Tools
-          </h2>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {adminLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="group flex items-start gap-4 bg-white border border-stone-200 rounded-xl px-5 py-4 hover:border-stone-300 hover:shadow-sm transition-all"
-              >
-                <div className="w-8 h-8 rounded-lg bg-stone-50 flex items-center justify-center shrink-0 group-hover:bg-stone-100 transition-colors">
-                  {link.icon}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-stone-800 mb-0.5">
-                    {link.label}
-                  </p>
-                  <p className="text-xs text-stone-400 leading-relaxed">
-                    {link.description}
-                  </p>
-                </div>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  className="text-stone-300 ml-auto mt-1 shrink-0 group-hover:text-stone-400 transition-colors"
-                >
-                  <path
-                    d="M5 2.5L9.5 7L5 11.5"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </a>
-            ))}
-          </div>
-        </nav>
-
-        {/* Back to canvas */}
-        <div className="pt-2">
-          <a
-            href="/"
-            className="inline-flex items-center gap-2 text-sm text-stone-400 hover:text-stone-600 transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path
-                d="M9 2.5L4.5 7L9 11.5"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Back to canvas
-          </a>
-        </div>
       </div>
-    </main>
+    </div>
   );
 }

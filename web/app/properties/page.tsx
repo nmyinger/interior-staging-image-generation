@@ -5,7 +5,6 @@ import Link from "next/link";
 import { sql } from "@/lib/db";
 import { StatusBadge } from "@/components/properties/StatusBadge";
 import type { PropertyStatus } from "@/components/properties/StatusBadge";
-import { AppHeader } from "@/components/AppHeader";
 import { Plus, MapPin, Building2, Image as ImageIcon } from "lucide-react";
 
 interface PropertyRow {
@@ -51,9 +50,7 @@ export default async function PropertiesPage() {
   const properties = await getProperties(uid);
 
   return (
-    <main className="min-h-screen bg-stone-50">
-      <AppHeader breadcrumb={<span className="text-sm text-stone-600">Properties</span>} />
-
+    <div>
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Tab strip */}
         <div className="flex items-center gap-6 border-b border-stone-200 mb-6">
@@ -105,7 +102,7 @@ export default async function PropertiesPage() {
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }
 

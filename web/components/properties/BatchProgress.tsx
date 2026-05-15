@@ -211,15 +211,21 @@ export function BatchProgress({ batchId, totalPhotos, onComplete }: BatchProgres
 
             {/* Download if done */}
             {item.status === "done" && item.staged_url && (
-              <a
-                href={item.staged_url}
-                download
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={async () => {
+                  const res = await fetch(item.staged_url!);
+                  const blob = await res.blob();
+                  const objectUrl = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = objectUrl;
+                  a.download = `staged_${item.photo_filename.replace(/\.[^.]+$/, "")}.jpg`;
+                  a.click();
+                  setTimeout(() => URL.revokeObjectURL(objectUrl), 100);
+                }}
                 className="text-[10px] text-sage-600 hover:text-sage-800 shrink-0 border border-sage-200 rounded px-1.5 py-0.5 hover:bg-sage-50 transition-colors"
               >
                 Download
-              </a>
+              </button>
             )}
           </div>
         ))}

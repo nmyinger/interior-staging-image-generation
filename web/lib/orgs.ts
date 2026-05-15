@@ -17,16 +17,66 @@ export interface SubAccount extends Org {
 }
 
 /**
+ * Auto-provision a personal solo org for a user who doesn't have one yet.
+ * Idempotent: re-checks default_org_id inside a guarded UPDATE so concurrent
+ * sign-ins don't race to create duplicate orgs.
+ */
+export async function provisionPersonalOrg(params: {
+  userId: string;
+  userName: string;
+  userEmail: string;
+}): Promise<Org> {
+  const { userId, userName, userEmail } = params;
+
+  const orgId = genId();
+  const orgName = userName.trim() || userEmail.split("@")[0] || "My Workspace";
+
+  const slugBase = (userEmail.split("@")[0] ?? "user")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+  const slug = `${slugBase}-${orgId.slice(0, 6)}`;
+
+  const orgRows = (await sql`
+    INSERT INTO orgs (id, type, name, slug)
+    VALUES (${orgId}, 'solo', ${orgName}, ${slug})
+    RETURNING id, name, type, slug, parent_org_id, brand, settings, created_at
+  `) as Org[];
+
+  const org = orgRows[0];
+
+  const memberId = genId();
+  await sql`
+    INSERT INTO org_members (id, org_id, user_id, role, status)
+    VALUES (${memberId}, ${org.id}, ${userId}, 'owner', 'active')
+    ON CONFLICT (org_id, user_id) DO NOTHING
+  `;
+
+  // Only write default_org_id if still null — prevents a race between
+  // concurrent sign-ins from overwriting a recently-set value.
+  await sql`
+    UPDATE users SET default_org_id = ${org.id}
+    WHERE id = ${userId} AND default_org_id IS NULL
+  `;
+
+  return org;
+}
+
+/**
  * Get the active org for a user (prefers default_org_id, falls back to first
- * active org_members row ordered by created_at).
+ * active org_members row ordered by created_at, then lazy-provisions).
  */
 export async function getUserOrg(userId: string): Promise<Org | null> {
   // Prefer the user's default_org_id
   const userRows = (await sql`
-    SELECT default_org_id FROM users WHERE id = ${userId}
-  `) as { default_org_id: string | null }[];
+    SELECT default_org_id, email, name FROM users WHERE id = ${userId}
+  `) as { default_org_id: string | null; email: string; name: string }[];
 
-  const defaultOrgId = userRows[0]?.default_org_id ?? null;
+  const userRow = userRows[0];
+  if (!userRow) return null;
+
+  const defaultOrgId = userRow.default_org_id ?? null;
 
   if (defaultOrgId) {
     const rows = (await sql`
@@ -48,7 +98,14 @@ export async function getUserOrg(userId: string): Promise<Org | null> {
     LIMIT 1
   `) as Org[];
 
-  return rows[0] ?? null;
+  if (rows[0]) return rows[0];
+
+  // Lazy-provision for existing users who signed up before org auto-provisioning.
+  return provisionPersonalOrg({
+    userId,
+    userName: userRow.name ?? "",
+    userEmail: userRow.email ?? "",
+  });
 }
 
 /**

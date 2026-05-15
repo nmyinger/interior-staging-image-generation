@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { AppHeader } from "@/components/AppHeader";
 import { getSubscriptionDetails } from "@/lib/billing";
 import { TIERS, FREE_TIER_GENERATIONS } from "@/lib/stripe";
 import type { Tier } from "@/lib/stripe";
@@ -15,8 +14,6 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { UpgradeButton, ManageBillingButton } from "./BillingActions";
-
-// ── Tier price labels ────────────────────────────────────────────────────────
 
 const TIER_PRICES: Record<Tier, { monthly: string; annual: string; tagline: string }> = {
   solo: {
@@ -70,6 +67,59 @@ function UsageBar({ used, total }: { used: number; total: number | null }) {
   );
 }
 
+// ── Usage summary card — handles free and paid in one block ──────────────────
+
+function UsageSummaryCard({
+  details,
+  currentTier,
+}: {
+  details: NonNullable<Awaited<ReturnType<typeof getSubscriptionDetails>>>;
+  currentTier: Tier | "free";
+}) {
+  const isFree = currentTier === "free";
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">
+          {isFree ? "Free tier usage" : "Usage this period"}
+        </CardTitle>
+        {!isFree && details.currentPeriodEnd && (
+          <CardDescription>
+            Resets{" "}
+            {details.currentPeriodEnd.toLocaleDateString("en-US", {
+              month: "long",
+              day: "numeric",
+            })}
+          </CardDescription>
+        )}
+        {isFree && (
+          <CardDescription>
+            {FREE_TIER_GENERATIONS} generations included — no credit card required
+          </CardDescription>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <UsageBar
+          used={details.usedGenerations}
+          total={isFree ? FREE_TIER_GENERATIONS : details.includedGenerations}
+        />
+        {!isFree && details.cancelAtPeriodEnd && details.currentPeriodEnd && (
+          <p className="text-xs text-clay-500">
+            Subscription cancels on{" "}
+            {details.currentPeriodEnd.toLocaleDateString("en-US", {
+              month: "long",
+              day: "numeric",
+              year: "numeric",
+            })}
+            .
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Tier card ────────────────────────────────────────────────────────────────
 
 function TierCard({
@@ -87,7 +137,7 @@ function TierCard({
   const generationsLabel =
     config.includedGenerations === null
       ? "Unlimited generations"
-      : `${config.includedGenerations} generations/mo`;
+      : `${config.includedGenerations} generations / mo`;
 
   const overageLabel =
     config.overageCents === 0
@@ -100,10 +150,8 @@ function TierCard({
 
   return (
     <Card
-      className={`relative transition-shadow ${
-        isCurrent
-          ? "ring-2 ring-sage-500 shadow-sm"
-          : "hover:shadow-sm"
+      className={`relative flex flex-col transition-shadow ${
+        isCurrent ? "ring-2 ring-sage-500 shadow-sm" : "hover:shadow-sm"
       }`}
     >
       {isCurrent && (
@@ -113,9 +161,10 @@ function TierCard({
           </Badge>
         </div>
       )}
+
       <CardHeader className="pt-5">
-        <div className="flex items-start justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
             <CardTitle className="text-base font-semibold text-stone-800">
               {config.name}
             </CardTitle>
@@ -123,17 +172,19 @@ function TierCard({
               {prices.tagline}
             </CardDescription>
           </div>
-          <div className="text-right">
+          <div className="text-right shrink-0">
             <p className="text-lg font-bold text-stone-800">{prices.monthly}</p>
             <p className="text-xs text-stone-400">{prices.annual} billed annually</p>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-1.5 text-sm text-stone-600">
+
+      <CardContent className="flex-1 space-y-1.5 text-sm text-stone-600">
         <p className="font-medium text-stone-800">{generationsLabel}</p>
         {seatsLabel && <p>{seatsLabel}</p>}
         {overageLabel && <p className="text-xs text-stone-400">{overageLabel}</p>}
       </CardContent>
+
       <CardFooter className="pt-2">
         {isCurrent ? (
           <ManageBillingButton className="w-full" />
@@ -168,17 +219,7 @@ export default async function BillingPage({
   const hasSubscription = currentTier !== "free";
 
   return (
-    <main className="min-h-screen bg-stone-50">
-      <AppHeader
-        breadcrumb={
-          <>
-            <a href="/admin" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Admin</a>
-            <span className="text-stone-300 mx-0.5">/</span>
-            <span className="text-sm text-stone-700">Billing</span>
-          </>
-        }
-      />
-
+    <div>
       <div className="max-w-4xl mx-auto px-4 py-10 space-y-10">
         {/* Flash messages */}
         {params.success && (
@@ -192,99 +233,48 @@ export default async function BillingPage({
           </div>
         )}
 
-        {/* Current plan summary */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-semibold text-stone-800">Billing</h1>
-              <p className="text-sm text-stone-500 mt-0.5">
-                {user.email}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {details?.status && (
-                <Badge
-                  variant={
-                    details.status === "active" || details.status === "trialing"
-                      ? "outline"
-                      : "destructive"
-                  }
-                  className={
-                    details.status === "active"
-                      ? "border-moss-500 text-moss-500"
-                      : details.status === "trialing"
-                      ? "border-acacia-500 text-acacia-500"
-                      : undefined
-                  }
-                >
-                  {details.status === "trialing" ? "Trial" : details.status}
-                </Badge>
-              )}
-              {currentTier === "free" && (
-                <Badge variant="outline" className="border-stone-300 text-stone-500">
-                  Free tier
-                </Badge>
-              )}
-            </div>
+        {/* Header */}
+        <section className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold text-stone-800">Billing</h1>
+            <p className="text-sm text-stone-500 mt-0.5">{user.email}</p>
           </div>
-
-          {/* Usage this period */}
-          {details && (
-            <Card size="sm">
-              <CardHeader>
-                <CardTitle className="text-sm">Usage this period</CardTitle>
-                {details.currentPeriodEnd && (
-                  <CardDescription>
-                    Resets{" "}
-                    {details.currentPeriodEnd.toLocaleDateString("en-US", {
-                      month: "long",
-                      day: "numeric",
-                    })}
-                  </CardDescription>
-                )}
-              </CardHeader>
-              <CardContent>
-                <UsageBar
-                  used={details.usedGenerations}
-                  total={details.includedGenerations}
-                />
-                {details.cancelAtPeriodEnd && details.currentPeriodEnd && (
-                  <p className="text-xs text-clay-500 mt-2">
-                    Your subscription cancels on{" "}
-                    {details.currentPeriodEnd.toLocaleDateString("en-US", {
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                    .
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {currentTier === "free" && (
-            <Card size="sm">
-              <CardHeader>
-                <CardTitle className="text-sm">Free tier</CardTitle>
-                <CardDescription>
-                  {FREE_TIER_GENERATIONS} generations included — no credit card required
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <UsageBar
-                  used={details?.usedGenerations ?? 0}
-                  total={FREE_TIER_GENERATIONS}
-                />
-              </CardContent>
-            </Card>
-          )}
+          <div className="flex items-center gap-2">
+            {details?.status && (
+              <Badge
+                variant={
+                  details.status === "active" || details.status === "trialing"
+                    ? "outline"
+                    : "destructive"
+                }
+                className={
+                  details.status === "active"
+                    ? "border-moss-500 text-moss-500"
+                    : details.status === "trialing"
+                    ? "border-acacia-500 text-acacia-500"
+                    : undefined
+                }
+              >
+                {details.status === "trialing" ? "Trial" : details.status}
+              </Badge>
+            )}
+            {currentTier === "free" && (
+              <Badge variant="outline" className="border-stone-300 text-stone-500">
+                Free tier
+              </Badge>
+            )}
+          </div>
         </section>
 
-        {/* Pricing table */}
+        {/* Usage — single card, handles free and paid */}
+        {details && (
+          <UsageSummaryCard details={details} currentTier={currentTier} />
+        )}
+
+        {/* Plans */}
         <section className="space-y-4">
           <h2 className="text-base font-semibold text-stone-700">Plans</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-stretch">
             {(["solo", "studio", "brokerage"] as Tier[]).map((tier) => (
               <TierCard
                 key={tier}
@@ -299,6 +289,6 @@ export default async function BillingPage({
           </p>
         </section>
       </div>
-    </main>
+    </div>
   );
 }

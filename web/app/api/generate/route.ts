@@ -7,6 +7,7 @@ import { ALLOWED_MODEL_IDS, DEFAULT_MODEL_ID, type ModelId } from "@/lib/models"
 import { resolveAccess } from "@/lib/access";
 import { uploadToBlob, isBlobConfigured } from "@/lib/storage";
 import { canGenerate, recordGeneration, getSubscription } from "@/lib/billing";
+import { getUserOrg } from "@/lib/orgs";
 import { z } from "zod";
 
 const PROMPT_MAX_CHARS = 4096;
@@ -188,13 +189,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Look up org for billing record (best-effort — falls back to user-scoped ID)
+  // Look up org for billing record — subscription org first, then personal org.
+  // A real org_id is required because usage_events.org_id has a FK constraint.
   let orgId: string | null = null;
   try {
     const sub = await getSubscription(uid);
     orgId = (sub?.org_id as string) ?? null;
   } catch {
     /* billing tables not present yet — non-fatal */
+  }
+  if (!orgId) {
+    const org = await getUserOrg(uid);
+    orgId = org?.id ?? null;
   }
 
   // Determine billing period start (first day of current UTC month)

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { AppHeader } from "@/components/AppHeader";
 import {
   Select,
   SelectTrigger,
@@ -199,15 +198,7 @@ export default function ComplianceDashboard({
   }
 
   return (
-    <main className="min-h-screen bg-stone-50">
-      <AppHeader breadcrumb={
-        <>
-          <a href="/admin" className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Admin</a>
-          <span className="text-stone-300 mx-0.5">/</span>
-          <span className="text-sm text-stone-700">Compliance</span>
-        </>
-      } />
-
+    <div>
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-5">
         {/* ── Header row ───────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between gap-4">
@@ -527,7 +518,7 @@ export default function ComplianceDashboard({
           Showing up to 500 most recent disclosures. Use Export CSV for full audit history.
         </p>
       </div>
-    </main>
+    </div>
   );
 }
 

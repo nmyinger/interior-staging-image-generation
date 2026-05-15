@@ -50,7 +50,8 @@ export async function canGenerate(
     // Free tier — count all-time generations for this user
     try {
       const rows = await sql`
-        SELECT COUNT(*) as count FROM usage_events WHERE user_id = ${userId}
+        SELECT COUNT(*) as count FROM usage_events
+        WHERE user_id = ${userId} AND kind = 'generation'
       `;
       const total = Number(rows[0]?.count ?? 0);
       if (total >= FREE_TIER_GENERATIONS) {
@@ -173,15 +174,16 @@ export async function getSubscriptionDetails(userId: string): Promise<{
     const sub = await getSubscription(userId);
 
     if (!sub) {
-      // Free tier — get usage count
+      // Free tier — count all-time generations for this user
       let used = 0;
       try {
         const rows = await sql`
-          SELECT COUNT(*) as count FROM usage_events WHERE user_id = ${userId}
+          SELECT COUNT(*) as count FROM usage_events
+          WHERE user_id = ${userId} AND kind = 'generation'
         `;
         used = Number(rows[0]?.count ?? 0);
-      } catch {
-        /* table not present */
+      } catch (err) {
+        console.warn("[billing] getSubscriptionDetails free-tier count failed:", err);
       }
       return {
         tier: "free",

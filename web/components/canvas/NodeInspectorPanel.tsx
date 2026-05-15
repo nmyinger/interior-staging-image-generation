@@ -78,13 +78,18 @@ export function NodeInspectorPanel({
     onClose();
   }, [deleteElements, selectedNodeId, onClose]);
 
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
     if (!displayImageUrl) return;
-    const a = document.createElement("a");
-    a.href = displayImageUrl;
     const suffix = historyStep > 0 ? `_v${history.length - historyStep + 1}` : "";
-    a.download = `staged_${selectedNodeId}${suffix}.jpg`;
+    const filename = `staged_${selectedNodeId}${suffix}.jpg`;
+    const res = await fetch(displayImageUrl);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 100);
   }, [displayImageUrl, selectedNodeId, historyStep, history.length]);
 
   const handleRestore = useCallback(async () => {
