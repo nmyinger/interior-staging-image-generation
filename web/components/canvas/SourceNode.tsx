@@ -21,6 +21,7 @@ export const SourceNode = memo(function SourceNode({ id, data, selected }: NodeP
           src={d.photoUrl}
           alt=""
           loading="lazy"
+          decoding="async"
           className="w-full h-28 object-cover block"
         />
       ) : (

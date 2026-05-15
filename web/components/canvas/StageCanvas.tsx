@@ -347,9 +347,9 @@ export function StageCanvas({ sessionId, readOnly }: { sessionId: string; readOn
         if (!res.ok) throw new Error("Upload failed");
         const { photo } = await res.json();
 
-        const finalUrl = blobUrl
-          ? `${blobUrl}?width=300`
-          : `/api/photos/${encodeURIComponent(photo.filename)}?w=300`;
+        // Always route through the proxy for consistent sharp resizing.
+        // Raw blob URLs don't support ?width= transforms; the proxy fetches + resizes.
+        const finalUrl = `/api/photos/${encodeURIComponent(photo.filename)}?w=300`;
 
         setNodes(nds =>
           nds.map(n =>

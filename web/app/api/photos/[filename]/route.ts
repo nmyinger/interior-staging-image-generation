@@ -27,22 +27,35 @@ export async function GET(
     mime_type: string;
   };
 
-  // Blob-stored photo: redirect directly (browser/CDN caches it)
+  const w = req.nextUrl.searchParams.get("w");
+  const width = w ? Math.min(parseInt(w, 10), 1200) : null;
+
+  // Blob-stored photo: fetch raw bytes, resize with sharp, return with immutable CDN cache.
+  // Vercel Blob CDN does not support ?width= transforms — redirecting there delivers full-res.
   if (image_url) {
-    const w = req.nextUrl.searchParams.get("w");
-    const redirectUrl = w ? `${image_url}?width=${Math.min(parseInt(w, 10), 1200)}` : image_url;
-    return NextResponse.redirect(redirectUrl, { status: 302 });
+    if (!width) {
+      // No resize requested — pass through to blob directly
+      return NextResponse.redirect(image_url, { status: 302 });
+    }
+    const blobRes = await fetch(image_url);
+    if (!blobRes.ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const raw = Buffer.from(await blobRes.arrayBuffer());
+    const resized = Buffer.from(
+      await sharp(raw).resize({ width, withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer()
+    );
+    return new NextResponse(resized, {
+      headers: {
+        "Content-Type": "image/jpeg",
+        "Cache-Control": "public, max-age=31536000, immutable",
+      },
+    });
   }
 
   // Legacy base64 fallback
   if (!image_b64) return NextResponse.json({ error: "Not found" }, { status: 404 });
   let buffer = Buffer.from(image_b64, "base64");
-  const w = req.nextUrl.searchParams.get("w");
-  if (w) {
-    const width = Math.min(parseInt(w, 10), 1200);
-    if (width > 0) {
-      buffer = Buffer.from(await sharp(buffer).resize({ width, withoutEnlargement: true }).toBuffer());
-    }
+  if (width && width > 0) {
+    buffer = Buffer.from(await sharp(buffer).resize({ width, withoutEnlargement: true }).toBuffer());
   }
 
   return new NextResponse(buffer, {

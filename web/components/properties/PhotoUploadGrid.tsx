@@ -309,15 +309,15 @@ function BeforeAfterRow({
   photo: PropertyPhoto;
   onRemove: (id: string) => void;
 }) {
-  const originalUrl = photo.image_url ?? photo.original_url;
+  const proxyUrl = `/api/photos/${encodeURIComponent(photo.photo_filename)}?w=600`;
 
   return (
     <div className="grid grid-cols-2 gap-2">
       {/* Unfurnished */}
       <div className="group relative rounded-lg overflow-hidden border border-stone-200 bg-white aspect-[4/3]">
-        {originalUrl ? (
+        {photo.image_url || photo.original_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={sizedUrl(originalUrl, 600) ?? undefined} alt={photo.photo_filename} loading="lazy" className="w-full h-full object-cover" />
+          <img src={proxyUrl} alt={photo.photo_filename} loading="lazy" decoding="async" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <ImageIcon size={20} className="text-stone-300" strokeWidth={1.25} />
@@ -355,7 +355,7 @@ function BeforeAfterRow({
       <div className="rounded-lg overflow-hidden border border-stone-200 bg-stone-50 aspect-[4/3] flex items-center justify-center">
         {photo.stagedUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={sizedUrl(photo.stagedUrl, 600) ?? undefined} alt={`${photo.photo_filename} staged`} loading="lazy" className="w-full h-full object-cover" />
+          <img src={sizedUrl(photo.stagedUrl, 600) ?? undefined} alt={`${photo.photo_filename} staged`} loading="lazy" decoding="async" className="w-full h-full object-cover" />
         ) : (
           <div className="flex flex-col items-center gap-1.5 text-stone-300">
             <ImageIcon size={20} strokeWidth={1.25} />
@@ -368,14 +368,18 @@ function BeforeAfterRow({
 }
 
 function PhotoCard({ photo, onRemove }: { photo: PropertyPhoto; onRemove: (id: string) => void }) {
-  const imageUrl = sizedUrl(photo.stagedUrl ?? photo.image_url ?? photo.original_url, 400);
+  // For staged images use the blob URL (no proxy for batch outputs).
+  // For originals, route through the resize proxy so the browser gets a proper thumbnail.
+  const imageUrl = photo.stagedUrl
+    ? sizedUrl(photo.stagedUrl, 600)
+    : `/api/photos/${encodeURIComponent(photo.photo_filename)}?w=400`;
 
   return (
     <div className="group relative rounded-xl overflow-hidden border border-stone-200 bg-white shadow-sm">
       <div className="relative aspect-[4/3] bg-stone-100">
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={imageUrl} alt={photo.photo_filename} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+          <img src={imageUrl} alt={photo.photo_filename} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <ImageIcon size={24} className="text-stone-300" strokeWidth={1.25} />

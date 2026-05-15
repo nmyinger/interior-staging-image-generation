@@ -160,6 +160,7 @@ export function NodeInspectorPanel({
                 <img
                   src={largerUrl(photoData.photoUrl)}
                   alt={photoData.filename}
+                  decoding="async"
                   className="w-full rounded-lg object-cover"
                 />
               )}
