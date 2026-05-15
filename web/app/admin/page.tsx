@@ -96,6 +96,30 @@ const adminLinks = [
       </svg>
     ),
   },
+  {
+    href: "/admin/team",
+    label: "Team",
+    description: "Manage team members, client workspaces, and access",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-stone-500">
+        <circle cx="6.5" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.4" />
+        <path d="M1.5 15c0-2.761 2.239-5 5-5s5 2.239 5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        <circle cx="13.5" cy="6" r="2" stroke="currentColor" strokeWidth="1.4" />
+        <path d="M16.5 15c0-2.209-1.343-4-3-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    href: "/admin/settings",
+    label: "Settings",
+    description: "MLS compliance rules and workspace configuration",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="text-stone-500">
+        <circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.4" />
+        <path d="M9 1.5v1.75M9 14.75V16.5M1.5 9h1.75M14.75 9H16.5M3.576 3.576l1.237 1.237M13.187 13.187l1.237 1.237M3.576 14.424l1.237-1.237M13.187 4.813l1.237-1.237" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
+    ),
+  },
 ];
 
 export default async function AdminPage() {
