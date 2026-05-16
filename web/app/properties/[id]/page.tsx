@@ -3,58 +3,24 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
-import { StatusBadge } from "@/components/properties/StatusBadge";
-import type { PropertyStatus } from "@/components/properties/StatusBadge";
-import { PhotoUploadGrid } from "@/components/properties/PhotoUploadGrid";
-import type { PropertyPhoto, PropertyRoom } from "@/components/properties/PhotoUploadGrid";
+import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { RoomCard } from "@/components/properties/RoomCard";
+import type { PropertyPhoto, PropertyRoom } from "@/components/properties/RoomCard";
 import { BatchProgress } from "@/components/properties/BatchProgress";
 import type { BatchItem } from "@/components/properties/BatchProgress";
+import { StatusBadge } from "@/components/properties/StatusBadge";
+import type { PropertyStatus } from "@/components/properties/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   ArrowLeft,
   Loader2,
   Zap,
-  Check,
-  Download,
   PencilLine,
   Frame,
   Plus,
+  ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-
-const MLS_OPTIONS = [
-  { value: "", label: "None" },
-  { value: "HAR", label: "HAR" },
-  { value: "ACTRIS", label: "ACTRIS" },
-  { value: "CRMLS", label: "CRMLS" },
-  { value: "SDMLS", label: "SDMLS" },
-  { value: "BRIGHT", label: "Bright MLS" },
-  { value: "FMLS", label: "FMLS" },
-  { value: "BEACHES", label: "BeachesMLS" },
-  { value: "CA-AB723", label: "CA-AB723" },
-  { value: "WI-ACT69", label: "WI-Act69" },
-];
-
-const STYLE_OPTIONS = [
-  { value: "", label: "Select a style…" },
-  { value: "modern-transitional", label: "Modern Transitional" },
-  { value: "modern-farmhouse", label: "Modern Farmhouse" },
-  { value: "scandinavian", label: "Scandinavian" },
-  { value: "mid-century-modern", label: "Mid-Century Modern" },
-  { value: "traditional", label: "Traditional" },
-  { value: "coastal", label: "Coastal" },
-  { value: "industrial", label: "Industrial" },
-];
 
 interface PropertyData {
   id: string;
@@ -62,11 +28,7 @@ interface PropertyData {
   address: string | null;
   mls: string | null;
   status: PropertyStatus;
-  style_brief: {
-    style?: string;
-    colorNotes?: string;
-    additionalNotes?: string;
-  };
+  style_brief: Record<string, unknown>;
   created_at: string;
   photos: PropertyPhoto[];
   rooms: PropertyRoom[];
@@ -93,28 +55,26 @@ export default function PropertyDetailPage() {
   const [nameDraft, setNameDraft] = useState("");
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Style brief
-  const [style, setStyle] = useState("");
-  const [colorNotes, setColorNotes] = useState("");
-  const [additionalNotes, setAdditionalNotes] = useState("");
-  const [briefSaving, setBriefSaving] = useState(false);
-  const [briefSaved, setBriefSaved] = useState(false);
-
-  // Batch controls
-  const [staging, setStaging] = useState(false);
-  const [stageError, setStageError] = useState<string | null>(null);
-  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
-  const [completedItems, setCompletedItems] = useState<BatchItem[] | null>(null);
-
-  // Photos state
+  // Photos and rooms
   const [photos, setPhotos] = useState<PropertyPhoto[]>([]);
-
-  // Rooms state
   const [rooms, setRooms] = useState<PropertyRoom[]>([]);
 
-  // Canvases state
+  // Per-room batch state: roomId → batchId
+  const [roomBatches, setRoomBatches] = useState<Record<string, string>>({});
+  const [roomStaging, setRoomStaging] = useState<Record<string, boolean>>({});
+
+  // All-rooms batch
+  const [allBatchId, setAllBatchId] = useState<string | null>(null);
+  const [allStaging, setAllStaging] = useState(false);
+
+  // Drag-and-drop active photo
+  const [activeDragPhoto, setActiveDragPhoto] = useState<PropertyPhoto | null>(null);
+
+  // Canvases
   const [canvases, setCanvases] = useState<{ id: string; name: string; created_at: string }[]>([]);
   const [creatingCanvas, setCreatingCanvas] = useState(false);
+
+  const [addingRoom, setAddingRoom] = useState(false);
 
   const initialized = useRef(false);
 
@@ -144,27 +104,17 @@ export default function PropertyDetailPage() {
   const loadProperty = useCallback(async () => {
     try {
       const res = await fetch(`/api/properties/${propertyId}`);
-      if (res.status === 401) {
-        router.push("/");
-        return;
-      }
-      if (!res.ok) {
-        setLoadError("Property not found.");
-        setLoading(false);
-        return;
-      }
+      if (res.status === 401) { router.push("/"); return; }
+      if (!res.ok) { setLoadError("Property not found."); setLoading(false); return; }
       const data: PropertyData = await res.json();
       setProperty(data);
       setPhotos(data.photos ?? []);
       setRooms(data.rooms ?? []);
-      setStyle(data.style_brief?.style ?? "");
-      setColorNotes(data.style_brief?.colorNotes ?? "");
-      setAdditionalNotes(data.style_brief?.additionalNotes ?? "");
 
-      // Resume polling if there's an active batch
+      // Resume polling if there's an active all-property batch
       const lb = data.latest_batch;
       if (lb && lb.status !== "done" && lb.status !== "failed") {
-        setActiveBatchId(lb.id);
+        setAllBatchId(lb.id);
       }
     } catch {
       setLoadError("Failed to load property.");
@@ -181,7 +131,8 @@ export default function PropertyDetailPage() {
     }
   }, [loadProperty, loadCanvases]);
 
-  // Name editing
+  // ── Name editing ────────────────────────────────────────────────────────────
+
   function startEditName() {
     setNameDraft(property?.name ?? "");
     setEditingName(true);
@@ -200,32 +151,114 @@ export default function PropertyDetailPage() {
     });
   }
 
-  // Style brief save
-  const saveBrief = useCallback(async () => {
-    setBriefSaving(true);
-    await fetch(`/api/properties/${propertyId}`, {
+  // ── Room management ─────────────────────────────────────────────────────────
+
+  async function addRoom() {
+    setAddingRoom(true);
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/rooms`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "New Room" }),
+      });
+      if (res.ok) {
+        const room: PropertyRoom = await res.json();
+        setRooms((prev) => [...prev, room]);
+      }
+    } finally {
+      setAddingRoom(false);
+    }
+  }
+
+  function handleRoomUpdate(updated: PropertyRoom) {
+    setRooms((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+  }
+
+  async function handleRoomDelete(roomId: string) {
+    const res = await fetch(`/api/properties/${propertyId}/rooms/${roomId}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      setRooms((prev) => prev.filter((r) => r.id !== roomId));
+      // Photos in this room lose their room assignment
+      setPhotos((prev) => prev.map((p) => (p.room_id === roomId ? { ...p, room_id: null } : p)));
+    }
+  }
+
+  // ── Photo management ────────────────────────────────────────────────────────
+
+  function handlePhotoAdd(photo: PropertyPhoto) {
+    setPhotos((prev) => [...prev, photo]);
+  }
+
+  async function handlePhotoRemove(photoId: string) {
+    const res = await fetch(`/api/properties/${propertyId}/photos`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ photoId }),
+    });
+    if (res.ok) {
+      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+    }
+  }
+
+  // ── Drag and drop ───────────────────────────────────────────────────────────
+
+  function handleDragStart(event: DragStartEvent) {
+    const photo = photos.find((p) => p.id === event.active.id);
+    setActiveDragPhoto(photo ?? null);
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    setActiveDragPhoto(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const photoId = active.id as string;
+    const targetRoomId = over.id as string;
+
+    const photo = photos.find((p) => p.id === photoId);
+    if (!photo || photo.room_id === targetRoomId) return;
+
+    // Optimistic update
+    setPhotos((prev) =>
+      prev.map((p) => (p.id === photoId ? { ...p, room_id: targetRoomId } : p))
+    );
+
+    await fetch(`/api/properties/${propertyId}/photos`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        style_brief: {
-          style: style || undefined,
-          colorNotes: colorNotes.trim() || undefined,
-          additionalNotes: additionalNotes.trim() || undefined,
-        },
-      }),
+      body: JSON.stringify({ photoId, roomId: targetRoomId }),
     });
-    setBriefSaving(false);
-    setBriefSaved(true);
-    setTimeout(() => setBriefSaved(false), 2000);
-  }, [propertyId, style, colorNotes, additionalNotes]);
+  }
 
-  // Stage all photos
-  async function stageAllPhotos() {
-    if (photos.length === 0) return;
-    setStaging(true);
-    setStageError(null);
-    setCompletedItems(null);
+  // ── Staging ─────────────────────────────────────────────────────────────────
 
+  async function stageRoom(roomId: string) {
+    setRoomStaging((prev) => ({ ...prev, [roomId]: true }));
+    try {
+      const res = await fetch(`/api/properties/${propertyId}/batches`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "Failed to start staging");
+        return;
+      }
+      const { batchId } = await res.json();
+      setRoomBatches((prev) => ({ ...prev, [roomId]: batchId }));
+      setProperty((p) => (p ? { ...p, status: "queued" } : p));
+    } finally {
+      setRoomStaging((prev) => ({ ...prev, [roomId]: false }));
+    }
+  }
+
+  async function stageAll() {
+    const allPhotos = photos;
+    if (allPhotos.length === 0) return;
+    setAllStaging(true);
     try {
       const res = await fetch(`/api/properties/${propertyId}/batches`, {
         method: "POST",
@@ -234,39 +267,51 @@ export default function PropertyDetailPage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        setStageError(err.error ?? "Failed to start batch.");
+        toast.error(err.error ?? "Failed to start staging");
         return;
       }
-      const data = await res.json();
-      const batchId = data.batchId ?? data.id;
-      setActiveBatchId(batchId);
+      const { batchId } = await res.json();
+      setAllBatchId(batchId);
       setProperty((p) => (p ? { ...p, status: "queued" } : p));
-    } catch {
-      setStageError("Network error. Please try again.");
     } finally {
-      setStaging(false);
+      setAllStaging(false);
     }
   }
 
-  async function handleBatchComplete(items: BatchItem[]) {
-    setCompletedItems(items);
-    setProperty((p) => (p ? { ...p, status: "done" } : p));
+  function handleRoomBatchComplete(roomId: string, items: BatchItem[]) {
+    // Update photos with their staged URLs
     setPhotos((prev) =>
       prev.map((photo) => {
-        const matchedItem = items.find(
-          (item) => item.photo_filename === photo.photo_filename
-        );
-        if (matchedItem?.staged_url) {
-          return { ...photo, stagedUrl: matchedItem.staged_url, batchStatus: "done" };
-        }
+        const match = items.find((i) => i.photo_filename === photo.photo_filename);
+        if (match?.staged_url) return { ...photo, stagedUrl: match.staged_url, batchStatus: "done" };
         return photo;
       })
     );
+    setRoomBatches((prev) => {
+      const next = { ...prev };
+      delete next[roomId];
+      return next;
+    });
+    setProperty((p) => (p ? { ...p, status: "done" } : p));
+    autoCreateCanvas(items);
+  }
 
-    // Auto-create a canvas with the staged results
+  function handleAllBatchComplete(items: BatchItem[]) {
+    setPhotos((prev) =>
+      prev.map((photo) => {
+        const match = items.find((i) => i.photo_filename === photo.photo_filename);
+        if (match?.staged_url) return { ...photo, stagedUrl: match.staged_url, batchStatus: "done" };
+        return photo;
+      })
+    );
+    setAllBatchId(null);
+    setProperty((p) => (p ? { ...p, status: "done" } : p));
+    autoCreateCanvas(items);
+  }
+
+  async function autoCreateCanvas(items: BatchItem[]) {
     const stagedItems = items.filter((i) => i.staged_url);
-    if (stagedItems.length === 0) return;
-
+    if (!stagedItems.length) return;
     try {
       const sessionRes = await fetch("/api/sessions", {
         method: "POST",
@@ -276,7 +321,6 @@ export default function PropertyDetailPage() {
       if (!sessionRes.ok) return;
       const { id: newSessionId } = await sessionRes.json();
 
-      // Build source + generation node pairs for each staged photo
       const nodes: Array<{ id: string; type: string; x: number; y: number; data: Record<string, unknown> }> = [];
       const edges: Array<{ id: string; source: string; sourceHandle: string; target: string; targetHandle: string }> = [];
 
@@ -284,7 +328,6 @@ export default function PropertyDetailPage() {
         const y = i * 260;
         const sourceNodeId = crypto.randomUUID();
         const genNodeId = crypto.randomUUID();
-
         if (item.original_url) {
           nodes.push({ id: sourceNodeId, type: "photo", x: 50, y, data: { filename: item.photo_filename, photoUrl: item.original_url } });
           nodes.push({ id: genNodeId, type: "generation", x: 420, y, data: { prompt: "", status: "done", outputUrl: item.staged_url, outputImageUrl: item.staged_url } });
@@ -300,25 +343,19 @@ export default function PropertyDetailPage() {
         body: JSON.stringify({ sessionId: newSessionId, nodes, edges }),
       });
 
-      // Refresh canvases list
-      const canvasListRes = await fetch(`/api/sessions?property_id=${propertyId}`);
-      if (canvasListRes.ok) {
-        const data = await canvasListRes.json();
+      const listRes = await fetch(`/api/sessions?property_id=${propertyId}`);
+      if (listRes.ok) {
+        const data = await listRes.json();
         setCanvases(data.sessions ?? []);
       }
-
       toast.success("Canvas created with your staged results");
     } catch {
-      // Canvas creation is best-effort; don't surface to user
+      // best-effort
     }
   }
 
-  const batchIsActive =
-    activeBatchId !== null &&
-    property?.status !== "done" &&
-    property?.status !== "failed";
+  // ── Render ──────────────────────────────────────────────────────────────────
 
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-stone-50 flex items-center justify-center">
@@ -331,17 +368,18 @@ export default function PropertyDetailPage() {
     return (
       <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center gap-4">
         <p className="text-sm text-stone-500">{loadError ?? "Property not found."}</p>
-        <Link href="/properties" className="text-sm text-sage-600 hover:underline">
-          Back to properties
-        </Link>
+        <Link href="/properties" className="text-sm text-sage-600 hover:underline">Back to properties</Link>
       </div>
     );
   }
 
+  const anyRoomBatchRunning = Object.keys(roomBatches).length > 0;
+  const allPhotosCount = photos.length;
+
   return (
     <div>
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6">
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         {/* Back link */}
         <Link
           href="/properties"
@@ -352,7 +390,7 @@ export default function PropertyDetailPage() {
         </Link>
 
         {/* Property header */}
-        <div className="mb-6 flex items-start gap-3 flex-wrap">
+        <div className="mb-6 flex items-start gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               {editingName ? (
@@ -369,16 +407,9 @@ export default function PropertyDetailPage() {
                   autoFocus
                 />
               ) : (
-                <button
-                  onClick={startEditName}
-                  className="group flex items-center gap-2"
-                  title="Click to rename"
-                >
+                <button onClick={startEditName} className="group flex items-center gap-2" title="Click to rename">
                   <h1 className="text-xl font-semibold text-stone-900">{property.name}</h1>
-                  <PencilLine
-                    size={14}
-                    className="text-stone-300 group-hover:text-stone-500 transition-colors"
-                  />
+                  <PencilLine size={14} className="text-stone-300 group-hover:text-stone-500 transition-colors" />
                 </button>
               )}
               {property.status !== "draft" && <StatusBadge status={property.status} />}
@@ -394,228 +425,105 @@ export default function PropertyDetailPage() {
           </div>
         </div>
 
-        {/* Two-column layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 items-start">
-          {/* Left: Photo grid */}
+        {/* ── Rooms ──────────────────────────────────────────────────────────── */}
+        <DndContext
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setActiveDragPhoto(null)}
+        >
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-stone-700">Photos</h2>
-            </div>
-            <PhotoUploadGrid
-              propertyId={propertyId}
-              photos={photos}
-              onPhotosChange={setPhotos}
-              rooms={rooms}
-              onRoomsChange={setRooms}
+            {rooms.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-14 gap-3 bg-white rounded-2xl border border-stone-200">
+                <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center">
+                  <ImageIcon size={18} strokeWidth={1.25} className="text-stone-400" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-stone-600">No rooms yet</p>
+                  <p className="text-xs text-stone-400 mt-0.5">Add a room to start uploading and staging photos</p>
+                </div>
+                <button
+                  onClick={addRoom}
+                  disabled={addingRoom}
+                  className="flex items-center gap-1.5 text-sm font-medium text-white bg-sage-600 hover:bg-sage-700 rounded-lg px-4 py-2 transition-colors shadow-sm"
+                >
+                  {addingRoom ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                  Add room
+                </button>
+              </div>
+            ) : (
+              rooms.map((room) => (
+                <RoomCard
+                  key={room.id}
+                  room={room}
+                  photos={photos.filter((p) => p.room_id === room.id)}
+                  propertyId={propertyId}
+                  activeBatchId={roomBatches[room.id] ?? null}
+                  staging={roomStaging[room.id] ?? false}
+                  onPhotoAdd={handlePhotoAdd}
+                  onPhotoRemove={handlePhotoRemove}
+                  onRoomUpdate={handleRoomUpdate}
+                  onRoomDelete={handleRoomDelete}
+                  onStage={() => stageRoom(room.id)}
+                  onBatchComplete={(items) => handleRoomBatchComplete(room.id, items)}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Drag overlay — ghost image while dragging */}
+          <DragOverlay>
+            {activeDragPhoto ? (
+              <div className="w-40 rounded-lg overflow-hidden shadow-xl opacity-90 rotate-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/api/photos/${encodeURIComponent(activeDragPhoto.photo_filename)}?w=300`}
+                  alt=""
+                  className="w-full aspect-[4/3] object-cover"
+                />
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+
+        {/* ── Add room + Stage all ─────────────────────────────────────────── */}
+        {rooms.length > 0 && (
+          <div className="flex items-center gap-3 mt-4">
+            <button
+              onClick={addRoom}
+              disabled={addingRoom}
+              className="flex items-center gap-1.5 text-xs font-medium text-stone-600 hover:text-stone-800 bg-stone-50 hover:bg-stone-100 border border-stone-200 rounded-lg px-3 py-2 transition-colors"
+            >
+              {addingRoom ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+              Add room
+            </button>
+
+            <button
+              onClick={stageAll}
+              disabled={allStaging || allBatchId !== null || anyRoomBatchRunning || allPhotosCount === 0}
+              className="flex items-center gap-1.5 text-xs font-medium text-white bg-sage-600 hover:bg-sage-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg px-4 py-2 transition-colors ml-auto"
+            >
+              {allStaging || allBatchId ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Zap size={12} />
+              )}
+              Stage all rooms
+            </button>
+          </div>
+        )}
+
+        {/* All-rooms batch progress */}
+        {allBatchId && (
+          <div className="mt-4">
+            <BatchProgress
+              batchId={allBatchId}
+              totalPhotos={allPhotosCount}
+              onComplete={handleAllBatchComplete}
             />
           </div>
+        )}
 
-          {/* Right: Style brief + batch controls */}
-          <div className="space-y-4">
-            {/* Style brief */}
-            <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
-              <div className="px-4 py-3 border-b border-stone-100">
-                <h2 className="text-sm font-semibold text-stone-700">Style brief</h2>
-              </div>
-              <div className="p-4 space-y-4">
-                {/* Style */}
-                <div className="space-y-1.5">
-                  <Label>Design style</Label>
-                  <Select value={style} onValueChange={(val) => setStyle(val ?? "")}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STYLE_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Color palette notes */}
-                <div className="space-y-1.5">
-                  <Label>Color palette</Label>
-                  <Textarea
-                    value={colorNotes}
-                    onChange={(e) => setColorNotes(e.target.value)}
-                    placeholder="Warm whites, greige tones, natural wood…"
-                    rows={2}
-                    className="resize-none text-sm"
-                  />
-                </div>
-
-                {/* Additional notes */}
-                <div className="space-y-1.5">
-                  <Label>Additional notes</Label>
-                  <Textarea
-                    value={additionalNotes}
-                    onChange={(e) => setAdditionalNotes(e.target.value)}
-                    placeholder="Furniture preferences, layout constraints…"
-                    rows={3}
-                    className="resize-none text-sm"
-                  />
-                </div>
-
-                {/* MLS selector */}
-                <div className="space-y-1.5">
-                  <Label>MLS board</Label>
-                  <Select
-                    value={property.mls ?? ""}
-                    onValueChange={async (val) => {
-                      const mls = val || null;
-                      setProperty((p) => (p ? { ...p, mls } : p));
-                      await fetch(`/api/properties/${propertyId}`, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ mls }),
-                      });
-                    }}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {MLS_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>{opt.value ? opt.label : "None"}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Save button */}
-                <Button
-                  onClick={saveBrief}
-                  disabled={briefSaving}
-                  size="sm"
-                  className="w-full bg-sage-600 hover:bg-sage-700 text-white flex items-center justify-center gap-2"
-                >
-                  {briefSaving ? (
-                    <Loader2 size={13} className="animate-spin" />
-                  ) : briefSaved ? (
-                    <Check size={13} />
-                  ) : null}
-                  {briefSaved ? "Saved" : "Save brief"}
-                </Button>
-              </div>
-            </div>
-
-            {/* Batch controls */}
-            <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
-              <div className="px-4 py-3 border-b border-stone-100">
-                <h2 className="text-sm font-semibold text-stone-700">Batch staging</h2>
-              </div>
-              <div className="p-4 space-y-4">
-                {/* Stage all button */}
-                {!batchIsActive && (
-                  <>
-                    <Button
-                      onClick={stageAllPhotos}
-                      disabled={staging || photos.length === 0}
-                      className="w-full bg-sage-600 hover:bg-sage-700 text-white flex items-center justify-center gap-2"
-                    >
-                      {staging ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Zap size={14} />
-                      )}
-                      {staging ? "Starting…" : `Stage all ${photos.length} photo${photos.length !== 1 ? "s" : ""}`}
-                    </Button>
-
-                    {photos.length === 0 && (
-                      <p className="text-xs text-stone-400 text-center">
-                        Upload photos first to start staging
-                      </p>
-                    )}
-
-                    {stageError && (
-                      <p className="text-xs text-clay-500 bg-clay-400/5 border border-clay-400/20 rounded-lg px-3 py-2">
-                        {stageError}
-                      </p>
-                    )}
-                  </>
-                )}
-
-                {/* Progress panel — while running */}
-                {batchIsActive && activeBatchId && (
-                  <BatchProgress
-                    batchId={activeBatchId}
-                    totalPhotos={photos.length}
-                    onComplete={handleBatchComplete}
-                  />
-                )}
-
-                {/* Results — when done */}
-                {completedItems && completedItems.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-medium text-stone-600">
-                        {completedItems.filter((i) => i.staged_url).length} staged results
-                      </p>
-                      {/* Re-run batch button */}
-                      <button
-                        onClick={stageAllPhotos}
-                        disabled={staging}
-                        className="text-xs text-sage-600 hover:text-sage-800 flex items-center gap-1"
-                      >
-                        <Zap size={11} />
-                        Re-run
-                      </button>
-                    </div>
-
-                    {/* Download all — open each individually in new tab */}
-                    {completedItems.some((i) => i.staged_url) && (
-                      <button
-                        onClick={() => {
-                          completedItems
-                            .filter((i) => i.staged_url)
-                            .forEach((item) => {
-                              window.open(item.staged_url!, "_blank");
-                            });
-                        }}
-                        className="w-full flex items-center justify-center gap-2 text-xs text-stone-600 hover:text-stone-800 border border-stone-200 hover:border-stone-300 rounded-lg py-2 transition-colors"
-                      >
-                        <Download size={13} />
-                        Download all ({completedItems.filter((i) => i.staged_url).length})
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* Previously completed batch (from initial load) */}
-                {!batchIsActive &&
-                  !completedItems &&
-                  property.latest_batch &&
-                  (property.latest_batch.status === "done" ||
-                    property.latest_batch.status === "failed") && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-stone-400">
-                        Last batch:{" "}
-                        <StatusBadge
-                          status={
-                            (property.latest_batch.status as PropertyStatus) ?? "draft"
-                          }
-                        />
-                      </p>
-                      {property.status !== "done" && (
-                        <Button
-                          onClick={stageAllPhotos}
-                          disabled={staging || photos.length === 0}
-                          size="sm"
-                          className="w-full bg-sage-600 hover:bg-sage-700 text-white flex items-center justify-center gap-2"
-                        >
-                          <Zap size={13} />
-                          Run new batch
-                        </Button>
-                      )}
-                    </div>
-                  )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Canvases section */}
+        {/* ── Canvases ─────────────────────────────────────────────────────── */}
         <div className="mt-8">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-stone-700">Canvases</h2>

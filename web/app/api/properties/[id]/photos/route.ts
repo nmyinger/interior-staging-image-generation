@@ -99,6 +99,7 @@ export async function POST(
     if (!filename) {
       return NextResponse.json({ error: "filename is required" }, { status: 400 });
     }
+    const roomId: string | null = typeof body.roomId === "string" ? body.roomId : null;
 
     // Verify the photo exists and belongs to this user
     const photoRows = await sql`
@@ -122,7 +123,7 @@ export async function POST(
 
     const id = genId();
     await sql`
-      INSERT INTO property_photos (id, property_id, photo_filename, room_type, zone, is_hero, position)
+      INSERT INTO property_photos (id, property_id, photo_filename, room_type, zone, is_hero, position, room_id)
       VALUES (
         ${id},
         ${propertyId},
@@ -130,12 +131,13 @@ export async function POST(
         ${(photo.room_type as string | null) ?? null},
         ${(photo.zone as string | null) ?? null},
         false,
-        ${position}
+        ${position},
+        ${roomId}
       )
     `;
 
     const rows = await sql`
-      SELECT id, property_id, photo_filename, room_type, zone, is_hero, position
+      SELECT id, property_id, photo_filename, room_type, zone, is_hero, position, room_id
       FROM property_photos WHERE id = ${id}
     `;
 

@@ -70,19 +70,28 @@ export async function POST(
     const model: string = ALLOWED_MODEL_IDS.includes(requestedModel as ModelId)
       ? requestedModel!
       : DEFAULT_MODEL_ID;
+    const roomId: string | null = typeof body.roomId === "string" ? body.roomId : null;
 
-    // Fetch all property_photos
-    const photoRows = await sql`
-      SELECT pp.id, pp.photo_filename, ph.image_url, ph.original_url
-      FROM property_photos pp
-      JOIN photos ph ON ph.filename = pp.photo_filename
-      WHERE pp.property_id = ${propertyId}
-      ORDER BY pp.position ASC
-    `;
+    // Fetch photos — optionally filtered to a single room
+    const photoRows = roomId
+      ? await sql`
+          SELECT pp.id, pp.photo_filename, ph.image_url, ph.original_url
+          FROM property_photos pp
+          JOIN photos ph ON ph.filename = pp.photo_filename
+          WHERE pp.property_id = ${propertyId} AND pp.room_id = ${roomId}
+          ORDER BY pp.position ASC
+        `
+      : await sql`
+          SELECT pp.id, pp.photo_filename, ph.image_url, ph.original_url
+          FROM property_photos pp
+          JOIN photos ph ON ph.filename = pp.photo_filename
+          WHERE pp.property_id = ${propertyId}
+          ORDER BY pp.position ASC
+        `;
 
     if (photoRows.length === 0) {
       return NextResponse.json(
-        { error: "No photos on this property — add photos first" },
+        { error: roomId ? "No photos in this room — add photos first" : "No photos on this property — add photos first" },
         { status: 400 }
       );
     }
