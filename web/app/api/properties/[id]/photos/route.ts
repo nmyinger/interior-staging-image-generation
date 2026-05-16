@@ -18,6 +18,37 @@ async function resolveProperty(propertyId: string, uid: string) {
   return rows[0] ?? null;
 }
 
+// PATCH /api/properties/[id]/photos — assign a photo to a room (or unassign)
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  const uid = getUid(session);
+  if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const { id: propertyId } = await params;
+    const property = await resolveProperty(propertyId, uid);
+    if (!property) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const body = await req.json();
+    const photoId: string | undefined = body.photoId;
+    if (!photoId) return NextResponse.json({ error: "photoId is required" }, { status: 400 });
+
+    const roomId: string | null = body.roomId ?? null;
+    await sql`
+      UPDATE property_photos SET room_id = ${roomId}
+      WHERE id = ${photoId} AND property_id = ${propertyId}
+    `;
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
 // DELETE /api/properties/[id]/photos — remove a photo from this property
 export async function DELETE(
   req: NextRequest,

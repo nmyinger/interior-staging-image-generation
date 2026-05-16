@@ -32,10 +32,10 @@ export async function GET(
     const property = await resolveProperty(id, uid);
     if (!property) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const [photos, batches] = await Promise.all([
+    const [photos, batches, rooms] = await Promise.all([
       sql`
         SELECT
-          pp.id, pp.photo_filename, pp.room_type, pp.zone, pp.is_hero, pp.position,
+          pp.id, pp.photo_filename, pp.room_type, pp.zone, pp.is_hero, pp.position, pp.room_id,
           ph.image_url, ph.original_url, ph.mime_type
         FROM property_photos pp
         JOIN photos ph ON ph.filename = pp.photo_filename
@@ -49,11 +49,18 @@ export async function GET(
         ORDER BY started_at DESC NULLS LAST
         LIMIT 1
       `,
+      sql`
+        SELECT id, name, prompt, position
+        FROM property_rooms
+        WHERE property_id = ${id}
+        ORDER BY position ASC, created_at ASC
+      `,
     ]);
 
     return NextResponse.json({
       ...property,
       photos,
+      rooms,
       latest_batch: batches[0] ?? null,
     });
   } catch (err) {

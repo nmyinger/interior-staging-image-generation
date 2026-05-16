@@ -13,7 +13,7 @@ import {
 import { StatusBadge } from "@/components/properties/StatusBadge";
 import type { PropertyStatus } from "@/components/properties/StatusBadge";
 import { PhotoUploadGrid } from "@/components/properties/PhotoUploadGrid";
-import type { PropertyPhoto } from "@/components/properties/PhotoUploadGrid";
+import type { PropertyPhoto, PropertyRoom } from "@/components/properties/PhotoUploadGrid";
 import { BatchProgress } from "@/components/properties/BatchProgress";
 import type { BatchItem } from "@/components/properties/BatchProgress";
 import { Button } from "@/components/ui/button";
@@ -69,6 +69,7 @@ interface PropertyData {
   };
   created_at: string;
   photos: PropertyPhoto[];
+  rooms: PropertyRoom[];
   latest_batch: {
     id: string;
     status: string;
@@ -107,6 +108,9 @@ export default function PropertyDetailPage() {
 
   // Photos state
   const [photos, setPhotos] = useState<PropertyPhoto[]>([]);
+
+  // Rooms state
+  const [rooms, setRooms] = useState<PropertyRoom[]>([]);
 
   // Canvases state
   const [canvases, setCanvases] = useState<{ id: string; name: string; created_at: string }[]>([]);
@@ -152,6 +156,7 @@ export default function PropertyDetailPage() {
       const data: PropertyData = await res.json();
       setProperty(data);
       setPhotos(data.photos ?? []);
+      setRooms(data.rooms ?? []);
       setStyle(data.style_brief?.style ?? "");
       setColorNotes(data.style_brief?.colorNotes ?? "");
       setAdditionalNotes(data.style_brief?.additionalNotes ?? "");
@@ -400,6 +405,8 @@ export default function PropertyDetailPage() {
               propertyId={propertyId}
               photos={photos}
               onPhotosChange={setPhotos}
+              rooms={rooms}
+              onRoomsChange={setRooms}
             />
           </div>
 

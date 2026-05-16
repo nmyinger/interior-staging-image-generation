@@ -107,6 +107,17 @@ export const properties = pgTable("properties", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
+export const propertyRooms = pgTable("property_rooms", {
+  id: text("id").primaryKey(),
+  propertyId: text("property_id")
+    .notNull()
+    .references(() => properties.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  prompt: text("prompt").notNull().default(""),
+  position: integer("position").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
 export const propertyPhotos = pgTable("property_photos", {
   id: text("id").primaryKey(),
   propertyId: text("property_id")
@@ -119,6 +130,7 @@ export const propertyPhotos = pgTable("property_photos", {
   zone: text("zone"),
   isHero: boolean("is_hero").notNull().default(false),
   position: integer("position").notNull().default(0),
+  roomId: text("room_id").references((): AnyPgColumn => propertyRooms.id, { onDelete: "set null" }),
 });
 
 // ---------------------------------------------------------------------------
