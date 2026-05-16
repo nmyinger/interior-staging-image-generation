@@ -109,7 +109,9 @@ usage_events        id (BIGSERIAL), org_id, user_id, kind, model, cost_cents,
                     billing_period_start, ref_id, created_at
 properties          id, org_id, client_org_id, name, address, mls, style_brief JSONB,
                     status ('draft'|'queued'|'analyzing'|'generating'|'done'|'failed')
-property_photos     id, property_id, photo_filename, zone, is_hero, position
+property_photos     id, property_id, photo_filename, zone, is_hero, position, room_id → property_rooms
+property_rooms      id, property_id, name, prompt, position, created_at
+                    — migration: drizzle/migrations/0002_property_rooms.sql
 batches             id, property_id, org_id, status, manifest JSONB, catalog JSONB
 batch_items         id, batch_id, property_photo_id, status, staged_url, staged_raw_url,
                     original_url, error
@@ -154,10 +156,12 @@ stripe_events_processed  stripe_event_id (PK) — idempotency for webhook handle
 | Route | Methods | Auth | Purpose |
 |---|---|---|---|
 | `/api/properties` | GET, POST | session | List / create properties |
-| `/api/properties/[id]` | GET, PATCH, DELETE | session | Property CRUD |
-| `/api/properties/[id]/photos` | POST | session | Link photo to property |
-| `/api/properties/[id]/batches` | GET, POST | session | List / create batches; POST fires Inngest |
-| `/api/batches/[id]` | GET | session | Poll batch status + item URLs |
+| `/api/properties/[id]` | GET, PATCH, DELETE | session | Property CRUD; GET returns `{ ...property, photos, rooms, latest_batch }` |
+| `/api/properties/[id]/rooms` | GET, POST | session | List / create rooms for a property |
+| `/api/properties/[id]/rooms/[roomId]` | PATCH, DELETE | session | Update room name/prompt/position; delete room (photos lose room_id) |
+| `/api/properties/[id]/photos` | POST, PATCH, DELETE | session | Link photo (POST); move room or bulk-reorder positions (PATCH); remove (DELETE) |
+| `/api/properties/[id]/batches` | GET, POST | session | List / create batches; POST accepts optional `roomId` to stage one room; fires Inngest |
+| `/api/batches/[id]` | GET | session | Poll batch status + per-item URLs and statuses |
 
 ### Billing
 
@@ -214,7 +218,7 @@ All `/api/v1/*` routes require `Authorization: Bearer isk_live_...` header. Rate
 | `/session/[id]` | server | Canvas editor |
 | `/properties` | server | Property list with status badges |
 | `/properties/new` | static | Create property form |
-| `/properties/[id]` | client | Property detail: photo upload grid + batch progress |
+| `/properties/[id]` | client | Property detail: rooms-first layout — each room is a `RoomCard` with its own upload zone, prompt, and Stage button; photos are sortable within a room and draggable between rooms via `@dnd-kit`; headless `BatchPoller` drives per-photo loading states inline |
 | `/admin` | server | Admin nav dashboard (7 cards) |
 | `/admin/billing` | server | Plan status, usage bar, upgrade/manage buttons |
 | `/admin/compliance` | server + client | Disclosure audit table with filters, revocation, CSV export |
@@ -346,8 +350,8 @@ SessionContext.ts       { sessionId: string; readOnly: boolean }
 | Component | Purpose |
 |---|---|
 | `StatusBadge.tsx` | 6-state badge: draft/queued/analyzing/generating/done/failed |
-| `PhotoUploadGrid.tsx` | Drag-and-drop upload; shows thumbnails with hero stars and batch status overlays |
-| `BatchProgress.tsx` | Polls `GET /api/batches/[id]` every 3s; shows progress bar, per-item dots, Download links |
+| `RoomCard.tsx` | Self-contained room card — file upload zone, prompt textarea, Stage button, sortable photo rows (Unfurnished/Furnished columns). Exports `PropertyPhoto` and `PropertyRoom` types used by the page. Uses `@dnd-kit/sortable` (`useSortable` + `SortableContext`) for within-room reordering and `useDroppable` for cross-room drops. |
+| `BatchProgress.tsx` | Exports `BatchPoller` (headless, renders null) — polls `GET /api/batches/[id]` every 3s and fires `onUpdate(items)` / `onComplete(items)` callbacks. Also exports the visual `BatchProgress` component (progress bar + per-item list) used in other contexts. |
 
 ## Access Control
 
@@ -380,6 +384,36 @@ Blob key conventions:
 - `gen/{orgId}/{batchItemId}/raw.jpg` — batch pipeline outputs
 
 Falls back to base64-in-DB when `BLOB_READ_WRITE_TOKEN` is not set.
+
+## Image Serving
+
+**Never use raw Vercel Blob URLs in `<img>` tags.** Blob URLs are full-resolution and uncompressed — they will always be slow. Two proxy routes handle all images:
+
+### `/api/photos/[filename]?w=<width>` — user-uploaded photos
+Routes through the `photos` table (keyed by filename). Fetches from Blob, resizes with Sharp, returns JPEG at 85% quality with `Cache-Control: public, max-age=31536000, immutable`. Use when you have a `photo_filename` / `photos.filename` value.
+
+### `/api/blob-proxy?url=<encoded>&w=<width>` — AI-generated outputs
+Use for `staged_url`, `output_url`, `outputUrl` — anything written by the Gemini pipeline that isn't in the `photos` table. Validates the URL is a Vercel Blob hostname (SSRF guard), then same Sharp + cache behavior. Pass `data:` and `blob:` URLs through unchanged (they're already local).
+
+**Why not `next/image`?** Photos are auth-gated — both proxy routes call `getServerSession` before serving. `next/image` serves through `/_next/image` which doesn't carry the user's session cookie and cannot enforce access control. The Sharp proxy pattern is correct here.
+
+**Width conventions:**
+
+| Context | Proxy | `?w=` |
+|---|---|---|
+| Property list thumbnails | `/api/photos/` | `?w=200` |
+| Canvas list thumbnails | `/api/photos/` | `?w=200` |
+| Batch progress thumbnails | `/api/photos/` (original) or `/api/blob-proxy` (staged) | `?w=120` |
+| Property detail / drag overlay | `/api/photos/` | `?w=300` (canvas), `?w=600` (room card) |
+| Inspector panel photo preview | `/api/photos/` via `largerUrl()` | `?w=600` |
+| Inspector panel gen output | `/api/blob-proxy` via `displayProxySrc()` | `?w=800` |
+| Generation node preview | `/api/blob-proxy` | `?w=600` |
+| Room card staged result | `/api/blob-proxy` | `?w=600` |
+| No `?w=` param on photos route | — | Pass-through redirect to raw Blob (full-res) |
+
+**`data:` and `blob:` URLs** (base64 legacy payloads, upload previews) are never proxied — they're already in memory.
+
+**Known limitation:** `Cache-Control: immutable` is set, but filenames are user-supplied (not content-addressed). A re-uploaded file with the same name will be stale in browser cache until the year-long TTL expires.
 
 ## CSS Tokens
 
