@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { UserMenu } from "@/components/UserMenu";
 import { ShareModal } from "@/components/ShareModal";
+import { Button } from "@/components/ui/button";
 import { ChevronRight, Share2 } from "lucide-react";
 
 interface CanvasHeaderProps {
@@ -13,9 +14,10 @@ interface CanvasHeaderProps {
   ownerUserId: string;
   propertyId?: string | null;
   readOnly?: boolean;
+  isDemo?: boolean;
 }
 
-export function CanvasHeader({ canvasId, initialName, ownerUserId, propertyId, readOnly }: CanvasHeaderProps) {
+export function CanvasHeader({ canvasId, initialName, ownerUserId, propertyId, readOnly, isDemo }: CanvasHeaderProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const [name, setName] = useState(initialName);
@@ -103,7 +105,17 @@ export function CanvasHeader({ canvasId, initialName, ownerUserId, propertyId, r
               <span className="hidden sm:block">Share</span>
             </button>
           )}
-          <UserMenu />
+          {isDemo ? (
+            <Button
+              size="sm"
+              onClick={() => signIn("google", { callbackUrl: "/properties" })}
+              className="bg-sage-600 hover:bg-sage-700 text-white"
+            >
+              Sign in free
+            </Button>
+          ) : (
+            <UserMenu />
+          )}
         </div>
       </header>
 

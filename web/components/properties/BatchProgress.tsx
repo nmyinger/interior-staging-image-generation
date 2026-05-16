@@ -174,11 +174,17 @@ export function BatchProgress({ batchId, totalPhotos, onComplete }: BatchProgres
           <div key={item.id} className="flex items-center gap-3 px-4 py-2.5">
             {/* Thumbnail */}
             <div className="w-10 h-10 rounded-lg overflow-hidden bg-stone-100 shrink-0 border border-stone-200">
-              {(item.staged_url ?? item.original_url) ? (
+              {(item.staged_url ?? item.original_url ?? item.photo_filename) ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={(item.staged_url ?? item.original_url)!}
+                  src={
+                    item.staged_url
+                      ? `/api/blob-proxy?url=${encodeURIComponent(item.staged_url)}&w=120`
+                      : `/api/photos/${encodeURIComponent(item.photo_filename)}?w=120`
+                  }
                   alt={item.photo_filename}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover"
                 />
               ) : (

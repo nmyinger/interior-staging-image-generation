@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import {
   Building2,
+  Layers,
   ShieldCheck,
   CreditCard,
   Users,
@@ -21,6 +22,7 @@ interface NavItem {
 
 const WORKSPACE_NAV: NavItem[] = [
   { href: "/properties", label: "Properties", icon: Building2 },
+  { href: "/canvases", label: "Canvases", icon: Layers },
 ];
 
 const ACCOUNT_NAV: NavItem[] = [

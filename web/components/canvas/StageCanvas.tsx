@@ -74,7 +74,7 @@ interface DBEdge {
   target_handle: string;
 }
 
-export function StageCanvas({ sessionId, readOnly }: { sessionId: string; readOnly?: boolean }) {
+export function StageCanvas({ sessionId, readOnly, isDemo }: { sessionId: string; readOnly?: boolean; isDemo?: boolean }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [loading, setLoading] = useState(true);
@@ -470,7 +470,7 @@ export function StageCanvas({ sessionId, readOnly }: { sessionId: string; readOn
   }
 
   return (
-    <CanvasContext.Provider value={{ sessionId, readOnly: readOnly ?? false }}>
+    <CanvasContext.Provider value={{ sessionId, readOnly: readOnly ?? false, isDemo: isDemo ?? false }}>
       <div className="w-full h-full relative">
         <input
           ref={fileInputRef}

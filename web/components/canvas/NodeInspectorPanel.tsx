@@ -18,12 +18,16 @@ import type { GenerationNodeData, PhotoNodeData } from "@/types/nodes";
 
 function largerUrl(url: string | undefined): string | undefined {
   if (!url) return undefined;
-  if (url.startsWith("blob:")) return url;
+  if (url.startsWith("blob:") || url.startsWith("data:")) return url;
   if (url.startsWith("/api/photos/")) return url.replace(/[?&]w=\d+/, "") + "?w=600";
-  if (url.startsWith("http")) {
-    const [base] = url.split("?");
-    return `${base}?width=600`;
-  }
+  if (url.startsWith("http")) return `/api/blob-proxy?url=${encodeURIComponent(url)}&w=600`;
+  return url;
+}
+
+function displayProxySrc(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+  if (url.startsWith("http")) return `/api/blob-proxy?url=${encodeURIComponent(url)}&w=800`;
   return url;
 }
 
@@ -271,7 +275,7 @@ export function NodeInspectorPanel({
                   {displayImageUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={displayImageUrl}
+                      src={displayProxySrc(displayImageUrl)}
                       alt="staged output"
                       className="w-full rounded-lg object-cover"
                     />

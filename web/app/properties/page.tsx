@@ -14,7 +14,7 @@ interface PropertyRow {
   status: PropertyStatus;
   created_at: string;
   photo_count: number;
-  preview_urls: string[];
+  preview_filenames: string[];
 }
 
 async function getProperties(uid: string): Promise<PropertyRow[]> {
@@ -27,13 +27,13 @@ async function getProperties(uid: string): Promise<PropertyRow[]> {
       p.id, p.name, p.address, p.mls, p.status, p.created_at,
       COUNT(pp.id)::int AS photo_count,
       ARRAY(
-        SELECT ph.image_url
+        SELECT pp2.photo_filename
         FROM property_photos pp2
         JOIN photos ph ON ph.filename = pp2.photo_filename
         WHERE pp2.property_id = p.id AND ph.image_url IS NOT NULL
         ORDER BY pp2.position
         LIMIT 3
-      ) AS preview_urls
+      ) AS preview_filenames
     FROM properties p
     LEFT JOIN property_photos pp ON pp.property_id = p.id
     WHERE p.org_id = ${orgId}
@@ -142,12 +142,12 @@ function PropertyCard({ property }: { property: PropertyRow }) {
           </div>
         </div>
 
-        {property.preview_urls?.length > 0 && (
+        {property.preview_filenames?.length > 0 && (
           <div className="flex gap-1.5 shrink-0">
-            {property.preview_urls.slice(0, 3).map((url, i) => (
+            {property.preview_filenames.slice(0, 3).map((filename, i) => (
               <div key={i} className="w-16 h-11 rounded-lg overflow-hidden bg-stone-100 border border-stone-200">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="w-full h-full object-cover" />
+                <img src={`/api/photos/${encodeURIComponent(filename)}?w=200`} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
               </div>
             ))}
           </div>

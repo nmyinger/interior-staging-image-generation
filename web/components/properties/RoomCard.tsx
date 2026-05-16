@@ -237,7 +237,7 @@ export function RoomCard({
       />
 
       {/* ── Card header ──────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 border-b border-stone-100 flex items-center gap-3">
+      <div className="px-4 py-3 border-b border-stone-100 flex items-center gap-2">
         {/* Room name */}
         <div className="flex-1 min-w-0 flex items-center gap-2">
           {editingName ? (
@@ -266,6 +266,16 @@ export function RoomCard({
             · {photos.length} photo{photos.length !== 1 ? "s" : ""}
           </span>
         </div>
+
+        {/* Add photos */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-1.5 text-xs text-sage-700 bg-sage-50 hover:bg-sage-100 border border-sage-200 rounded-lg px-2.5 py-1 transition-colors shrink-0"
+        >
+          <Upload size={11} />
+          {uploading ? "Uploading…" : "Add photos"}
+        </button>
 
         {/* Stage button */}
         <button
@@ -317,27 +327,15 @@ export function RoomCard({
         onDragLeave={() => setFileDragOver(false)}
         onDrop={handleFileDrop}
       >
-        {/* Zone header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-stone-100">
-          {hasPhotos ? (
-            <div className="grid grid-cols-[20px_1fr_1fr_20px] gap-2 flex-1 mr-3">
-              <div />
-              <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">Unfurnished</p>
-              <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">Furnished</p>
-              <div />
-            </div>
-          ) : (
-            <div className="flex-1" />
-          )}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="flex items-center gap-1.5 text-xs text-sage-700 bg-sage-50 hover:bg-sage-100 border border-sage-200 rounded-lg px-2.5 py-1 transition-colors shrink-0"
-          >
-            <Upload size={11} />
-            {uploading ? "Uploading…" : "Add photos"}
-          </button>
-        </div>
+        {/* Zone header — column labels aligned to photo row grid */}
+        {hasPhotos && (
+          <div className="grid grid-cols-[20px_1fr_1fr_20px] gap-2 px-2 py-2 border-b border-stone-100">
+            <div />
+            <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">Unfurnished</p>
+            <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">Furnished</p>
+            <div />
+          </div>
+        )}
 
         {/* Photo rows */}
         {hasPhotos ? (
@@ -402,13 +400,13 @@ function DraggablePhotoRow({
       <div
         {...listeners}
         {...attributes}
-        className="flex items-center justify-center cursor-grab active:cursor-grabbing text-stone-300 hover:text-stone-500 transition-colors rounded"
+        className="flex items-center justify-center cursor-grab active:cursor-grabbing text-stone-400 hover:text-stone-600 transition-colors rounded"
       >
         <GripVertical size={14} />
       </div>
 
-      {/* Unfurnished */}
-      <div className="relative rounded-lg overflow-hidden border border-stone-200 bg-white aspect-[4/3]">
+      {/* Unfurnished — also acts as drag handle */}
+      <div {...listeners} className="relative rounded-lg overflow-hidden border border-stone-200 bg-white aspect-[4/3] cursor-grab active:cursor-grabbing">
         {photo.image_url || photo.original_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -470,7 +468,7 @@ function DraggablePhotoRow({
           render={
             <button
               onClick={() => onRemove(photo.id)}
-              className="flex items-center justify-center w-5 h-5 rounded text-stone-300 hover:text-clay-600 hover:bg-clay-50 transition-colors"
+              className="flex items-center justify-center w-5 h-5 rounded text-stone-400 hover:text-clay-600 hover:bg-clay-50 transition-colors"
             >
               <Trash2 size={11} />
             </button>

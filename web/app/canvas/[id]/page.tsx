@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { resolveAccess, verifyPasswordCookie, passwordCookieName } from "@/lib/access";
 import { StageCanvas } from "@/components/canvas/StageCanvas";
 import { CanvasHeader } from "@/components/CanvasHeader";
+import { DEMO_CANVAS_ID } from "@/lib/constants";
 
 export default async function CanvasPage({ params }: { params: Promise<{ id: string }> }) {
   await migrate();
@@ -35,6 +36,7 @@ export default async function CanvasPage({ params }: { params: Promise<{ id: str
     owner_user_id: string;
     property_id: string | null;
   };
+  const isDemo = id === DEMO_CANVAS_ID && !uid;
   const readOnly = !access.canWrite;
 
   return (
@@ -45,9 +47,10 @@ export default async function CanvasPage({ params }: { params: Promise<{ id: str
         ownerUserId={owner_user_id}
         propertyId={property_id}
         readOnly={readOnly}
+        isDemo={isDemo}
       />
       <div className="flex-1 min-h-0">
-        <StageCanvas sessionId={id} readOnly={readOnly} />
+        <StageCanvas sessionId={id} readOnly={readOnly} isDemo={isDemo} />
       </div>
     </main>
   );
