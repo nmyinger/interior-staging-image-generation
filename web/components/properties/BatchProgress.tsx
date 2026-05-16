@@ -180,9 +180,13 @@ export function BatchProgress({ batchId, totalPhotos, onComplete }: BatchProgres
                   src={
                     item.staged_url
                       ? `/api/blob-proxy?url=${encodeURIComponent(item.staged_url)}&w=120`
-                      : `/api/photos/${encodeURIComponent(item.photo_filename)}?w=120`
+                      : item.original_url
+                      ? `/api/blob-proxy?url=${encodeURIComponent(item.original_url)}&w=120`
+                      : item.photo_filename
+                      ? `/api/photos/${encodeURIComponent(item.photo_filename)}?w=120`
+                      : undefined
                   }
-                  alt={item.photo_filename}
+                  alt={item.photo_filename || "photo"}
                   loading="lazy"
                   decoding="async"
                   className="w-full h-full object-cover"
@@ -197,7 +201,7 @@ export function BatchProgress({ batchId, totalPhotos, onComplete }: BatchProgres
             {/* Meta */}
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium text-stone-700 truncate">
-                {item.photo_filename.replace(/^\d+-/, "")}
+                {item.photo_filename ? item.photo_filename.replace(/^\d+-/, "") : (item.room_type ?? item.zone ?? "photo")}
               </p>
               {(item.room_type || item.zone) && (
                 <p className="text-[10px] text-stone-400 truncate">
@@ -224,7 +228,7 @@ export function BatchProgress({ batchId, totalPhotos, onComplete }: BatchProgres
                   const objectUrl = URL.createObjectURL(blob);
                   const a = document.createElement("a");
                   a.href = objectUrl;
-                  a.download = `staged_${item.photo_filename.replace(/\.[^.]+$/, "")}.jpg`;
+                  a.download = `staged_${(item.photo_filename || item.id).replace(/\.[^.]+$/, "")}.jpg`;
                   a.click();
                   setTimeout(() => URL.revokeObjectURL(objectUrl), 100);
                 }}

@@ -41,7 +41,11 @@ export function CanvasHeader({ canvasId, initialName, ownerUserId, propertyId, r
     const trimmed = draft.trim() || name;
     setName(trimmed);
     if (trimmed !== name) {
-      await fetch(`/api/sessions/${canvasId}`, {
+      // Property canvas: rename via properties API; session canvas: via sessions API
+      const endpoint = propertyId && canvasId === propertyId
+        ? `/api/properties/${canvasId}`
+        : `/api/sessions/${canvasId}`;
+      await fetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: trimmed }),

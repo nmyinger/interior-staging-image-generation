@@ -54,6 +54,12 @@ export async function PATCH(
       WHERE id = ${photoId} AND property_id = ${propertyId}
     `;
 
+    // Sync unified assets table (asset id uses deterministic prefix)
+    await sql`
+      UPDATE assets SET room_id = ${roomId}
+      WHERE id = ${"ast_pp_" + photoId} AND property_id = ${propertyId}
+    `;
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -147,6 +153,31 @@ export async function POST(
         ${roomId}
       )
     `;
+
+    // Dual-write to unified assets table
+    const blobUrl = (photo.image_url as string | null) ?? "";
+    if (blobUrl) {
+      const orgId = property.org_id as string;
+      await sql`
+        INSERT INTO assets (id, org_id, property_id, room_id, kind, mime_type, blob_url, original_url,
+                            zone, room_type, position, uploaded_by)
+        VALUES (
+          ${"ast_pp_" + id},
+          ${orgId},
+          ${propertyId},
+          ${roomId},
+          'source',
+          ${(photo.mime_type as string | null) ?? "image/jpeg"},
+          ${blobUrl},
+          ${(photo.original_url as string | null) ?? null},
+          ${(photo.zone as string | null) ?? null},
+          ${(photo.room_type as string | null) ?? null},
+          ${position},
+          ${uid}
+        )
+        ON CONFLICT (id) DO NOTHING
+      `;
+    }
 
     const rows = await sql`
       SELECT id, property_id, photo_filename, room_type, zone, is_hero, position, room_id

@@ -2,7 +2,9 @@ export type NodeStatus = "idle" | "generating" | "done" | "error";
 
 export interface PhotoNodeData {
   filename: string;
-  photoUrl?: string; // computed at load time, not persisted
+  photoUrl?: string;  // computed at load time, not persisted
+  assetId?: string;   // unified model: asset ID
+  blobUrl?: string;   // unified model: raw blob URL (proxied via blob-proxy, never used directly in <img>)
 }
 
 export interface GenerationNodeData {

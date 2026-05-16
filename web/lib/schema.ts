@@ -4,6 +4,7 @@ import {
   timestamp,
   boolean,
   integer,
+  real,
   jsonb,
   bigserial,
   unique,
@@ -314,4 +315,134 @@ export const photos = pgTable("photos", {
   orgId: text("org_id"),
   sha256: text("sha256"),
   originalUrl: text("original_url"),
+});
+
+// ---------------------------------------------------------------------------
+// Unified schema (0003) — assets, generations, generation_inputs, canvas_layouts
+// ---------------------------------------------------------------------------
+
+export const rooms = pgTable(
+  "rooms",
+  {
+    id: text("id").primaryKey(),
+    propertyId: text("property_id")
+      .notNull()
+      .references(() => properties.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    prompt: text("prompt").notNull().default(""),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [index("rooms_property_idx").on(t.propertyId, t.position)]
+);
+
+export const assets = pgTable(
+  "assets",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id")
+      .notNull()
+      .references(() => orgs.id, { onDelete: "cascade" }),
+    propertyId: text("property_id").references(() => properties.id, { onDelete: "cascade" }),
+    roomId: text("room_id").references(() => rooms.id, { onDelete: "set null" }),
+    kind: text("kind").$type<"source" | "staged">().notNull(),
+    sha256: text("sha256"),
+    mimeType: text("mime_type").notNull().default("image/jpeg"),
+    width: integer("width"),
+    height: integer("height"),
+    blobUrl: text("blob_url").notNull(),
+    originalUrl: text("original_url"),
+    position: integer("position").notNull().default(0),
+    isHero: boolean("is_hero").notNull().default(false),
+    zone: text("zone"),
+    roomType: text("room_type"),
+    uploadedBy: text("uploaded_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [
+    index("assets_property_room_idx").on(t.propertyId, t.roomId, t.position),
+    index("assets_property_kind_idx").on(t.propertyId, t.kind),
+  ]
+);
+
+export const generations = pgTable(
+  "generations",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    propertyId: text("property_id")
+      .notNull()
+      .references(() => properties.id, { onDelete: "cascade" }),
+    roomId: text("room_id").references(() => rooms.id, { onDelete: "set null" }),
+    sourceAssetId: text("source_asset_id").references(() => assets.id, { onDelete: "set null" }),
+    outputAssetId: text("output_asset_id").references(() => assets.id, { onDelete: "set null" }),
+    prompt: text("prompt").notNull().default(""),
+    model: text("model"),
+    config: jsonb("config").$type<Record<string, unknown>>().default({}),
+    parentGenerationId: text("parent_generation_id").references(
+      (): AnyPgColumn => generations.id,
+      { onDelete: "set null" }
+    ),
+    batchId: text("batch_id").references(() => batches.id, { onDelete: "set null" }),
+    sequenceIndex: integer("sequence_index"),
+    status: text("status")
+      .$type<"idle" | "queued" | "running" | "done" | "failed">()
+      .notNull()
+      .default("idle"),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    createdBy: text("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => [
+    index("generations_property_idx").on(t.propertyId),
+    index("generations_source_idx").on(t.sourceAssetId),
+    index("generations_batch_seq_idx").on(t.batchId, t.sequenceIndex),
+  ]
+);
+
+export const generationInputs = pgTable(
+  "generation_inputs",
+  {
+    generationId: text("generation_id")
+      .notNull()
+      .references(() => generations.id, { onDelete: "cascade" }),
+    assetId: text("asset_id")
+      .notNull()
+      .references(() => assets.id, { onDelete: "cascade" }),
+    role: text("role").$type<"base" | "reference" | "hero">().notNull(),
+    ord: integer("ord").notNull().default(0),
+  },
+  (t) => [index("generation_inputs_gen_idx").on(t.generationId, t.role, t.ord)]
+);
+
+export const canvasLayouts = pgTable("canvas_layouts", {
+  propertyId: text("property_id")
+    .notNull()
+    .references(() => properties.id, { onDelete: "cascade" }),
+  entityKind: text("entity_kind").$type<"asset" | "generation">().notNull(),
+  entityId: text("entity_id").notNull(),
+  x: real("x").notNull().default(0),
+  y: real("y").notNull().default(0),
+});
+
+export const sessionsLegacy = pgTable("sessions_legacy", {
+  sessionId: text("session_id").primaryKey(),
+  propertyId: text("property_id")
+    .notNull()
+    .references(() => properties.id, { onDelete: "cascade" }),
+  wasScratch: boolean("was_scratch").notNull().default(false),
+  migratedAt: timestamp("migrated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const assetInlineData = pgTable("asset_inline_data", {
+  assetId: text("asset_id")
+    .primaryKey()
+    .references(() => assets.id, { onDelete: "cascade" }),
+  mimeType: text("mime_type").notNull(),
+  dataB64: text("data_b64").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });

@@ -61,20 +61,26 @@ function edgeStyle(targetHandle?: string | null) {
 interface DBNode {
   id: string;
   type: string;
-  x: number;
-  y: number;
+  // Legacy fields
+  x?: number;
+  y?: number;
+  // Unified fields
+  position?: { x: number; y: number };
   data: Record<string, unknown>;
 }
 
 interface DBEdge {
   id: string;
   source: string;
-  source_handle: string;
+  // Unified fields use camelCase; legacy uses snake_case
+  sourceHandle?: string;
+  source_handle?: string;
   target: string;
-  target_handle: string;
+  targetHandle?: string;
+  target_handle?: string;
 }
 
-export function StageCanvas({ sessionId, readOnly, isDemo }: { sessionId: string; readOnly?: boolean; isDemo?: boolean }) {
+export function StageCanvas({ sessionId, propertyId, readOnly, isDemo }: { sessionId?: string; propertyId?: string; readOnly?: boolean; isDemo?: boolean }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [loading, setLoading] = useState(true);
@@ -124,21 +130,35 @@ export function StageCanvas({ sessionId, readOnly, isDemo }: { sessionId: string
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch(`/api/canvas?sessionId=${sessionId}`);
+      const qs = propertyId ? `propertyId=${propertyId}` : `sessionId=${sessionId}`;
+      const res = await fetch(`/api/canvas?${qs}`);
       if (!res.ok) throw new Error("Failed to load canvas");
       const { nodes: dbNodes, edges: dbEdges }: { nodes: DBNode[]; edges: DBEdge[] } = await res.json();
 
       const rfNodes: Node[] = dbNodes.map(n => {
+        const pos = n.position ?? { x: n.x ?? 0, y: n.y ?? 0 };
         if (n.type === "photo") {
+          // Unified: blobUrl present; Legacy: filename present
+          const blobUrl = n.data.blobUrl as string | undefined;
+          const filename = n.data.filename as string | undefined;
+          const photoUrl = blobUrl
+            ? `/api/blob-proxy?url=${encodeURIComponent(blobUrl)}&w=300`
+            : filename
+            ? `/api/photos/${encodeURIComponent(filename)}?w=300`
+            : undefined;
           const data: PhotoNodeData = {
-            filename: n.data.filename as string,
-            photoUrl: `/api/photos/${encodeURIComponent(n.data.filename as string)}?w=300`,
+            filename: filename ?? (n.data.assetId as string) ?? n.id,
+            photoUrl,
+            assetId: (n.data.assetId as string) ?? undefined,
+            blobUrl,
           };
-          return { id: n.id, type: "photo", position: { x: n.x, y: n.y }, data: data as unknown as Record<string, unknown> };
+          return { id: n.id, type: "photo", position: pos, data: data as unknown as Record<string, unknown> };
         } else {
           const outputUrl = n.data.outputUrl as string | undefined;
           const outputB64 = n.data.outputB64 as string | undefined;
-          const outputImageUrl = outputUrl ?? (outputB64 ? `data:image/jpeg;base64,${outputB64}` : undefined);
+          const outputImageUrl = outputUrl
+            ? (outputUrl.startsWith("http") ? `/api/blob-proxy?url=${encodeURIComponent(outputUrl)}&w=600` : outputUrl)
+            : outputB64 ? `data:image/jpeg;base64,${outputB64}` : undefined;
           const data: GenerationNodeData = {
             prompt: (n.data.prompt as string) ?? "",
             status: n.data.status === "done" ? "done" : "idle",
@@ -147,7 +167,7 @@ export function StageCanvas({ sessionId, readOnly, isDemo }: { sessionId: string
             outputB64,
             outputImageUrl,
           };
-          return { id: n.id, type: "generation", position: { x: n.x, y: n.y }, data: data as unknown as Record<string, unknown> };
+          return { id: n.id, type: "generation", position: pos, data: data as unknown as Record<string, unknown> };
         }
       });
 
@@ -155,16 +175,20 @@ export function StageCanvas({ sessionId, readOnly, isDemo }: { sessionId: string
       const nodeIds = new Set(rfNodes.map(n => n.id));
       const rfEdges: Edge[] = dbEdges
         .filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
-        .map(e => ({
-          id: e.id,
-          source: e.source,
-          sourceHandle: e.source_handle,
-          target: e.target,
-          targetHandle: e.target_handle,
-          type: "deletable",
-          interactionWidth: 20,
-          style: edgeStyle(e.target_handle),
-        }));
+        .map(e => {
+          const srcHandle = e.sourceHandle ?? e.source_handle ?? "output";
+          const tgtHandle = e.targetHandle ?? e.target_handle ?? "input";
+          return {
+            id: e.id,
+            source: e.source,
+            sourceHandle: srcHandle,
+            target: e.target,
+            targetHandle: tgtHandle,
+            type: "deletable",
+            interactionWidth: 20,
+            style: edgeStyle(tgtHandle),
+          };
+        });
 
       setNodes(rfNodes);
       setEdges(rfEdges);
@@ -174,7 +198,7 @@ export function StageCanvas({ sessionId, readOnly, isDemo }: { sessionId: string
       setLoading(false);
       setTimeout(() => { saveEnabled.current = true; }, 800);
     }
-  }, [sessionId, setNodes, setEdges]);
+  }, [sessionId, propertyId, setNodes, setEdges]);
 
   useEffect(() => {
     if (!initialized.current) {
@@ -239,11 +263,11 @@ export function StageCanvas({ sessionId, readOnly, isDemo }: { sessionId: string
     fetch("/api/canvas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId, nodes: dbNodes, edges: dbEdges }),
+      body: JSON.stringify({ ...(propertyId ? { propertyId } : { sessionId }), nodes: dbNodes, edges: dbEdges }),
     })
       .then(r => (r.ok ? setSaveState("saved") : setSaveState("error")))
       .catch(() => setSaveState("error"));
-  }, [debouncedEdges, debouncedNodes, loading, readOnly, sessionId]);
+  }, [debouncedEdges, debouncedNodes, loading, readOnly, sessionId, propertyId]);
 
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
     if (changes.some(c => c.type === "remove")) snapshot();
@@ -470,7 +494,7 @@ export function StageCanvas({ sessionId, readOnly, isDemo }: { sessionId: string
   }
 
   return (
-    <CanvasContext.Provider value={{ sessionId, readOnly: readOnly ?? false, isDemo: isDemo ?? false }}>
+    <CanvasContext.Provider value={{ sessionId: sessionId ?? "", propertyId, readOnly: readOnly ?? false, isDemo: isDemo ?? false }}>
       <div className="w-full h-full relative">
         <input
           ref={fileInputRef}

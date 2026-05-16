@@ -1,4 +1,5 @@
 import { put } from "@vercel/blob";
+import { sql } from "@/lib/db";
 
 export function isBlobConfigured(): boolean {
   return !!process.env.BLOB_READ_WRITE_TOKEN;
@@ -24,4 +25,24 @@ export async function uploadToBlob(
     addRandomSuffix: false,
   });
   return url;
+}
+
+/**
+ * Dev fallback: store base64 image inline in asset_inline_data and return
+ * a local API URL that serves it back. Use only when Blob is not configured.
+ */
+export async function storeInlineAsset(
+  assetId: string,
+  b64: string,
+  mimeType: string
+): Promise<string> {
+  await sql`
+    INSERT INTO asset_inline_data (asset_id, mime_type, data_b64)
+    VALUES (${assetId}, ${mimeType}, ${b64})
+    ON CONFLICT (asset_id) DO UPDATE
+      SET data_b64  = EXCLUDED.data_b64,
+          mime_type = EXCLUDED.mime_type
+  `;
+  const base = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+  return `${base}/api/assets/${assetId}/inline`;
 }

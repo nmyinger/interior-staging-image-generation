@@ -72,53 +72,102 @@ export async function POST(
       : DEFAULT_MODEL_ID;
     const roomId: string | null = typeof body.roomId === "string" ? body.roomId : null;
 
-    // Fetch photos — optionally filtered to a single room
-    const photoRows = roomId
+    // Prefer unified path: query assets table
+    const assetRows = roomId
       ? await sql`
-          SELECT pp.id, pp.photo_filename, ph.image_url, ph.original_url
-          FROM property_photos pp
-          JOIN photos ph ON ph.filename = pp.photo_filename
-          WHERE pp.property_id = ${propertyId} AND pp.room_id = ${roomId}
-          ORDER BY pp.position ASC
+          SELECT id, room_id, zone, room_type, is_hero, position, blob_url
+          FROM assets
+          WHERE property_id = ${propertyId} AND kind = 'source' AND room_id = ${roomId}
+          ORDER BY position ASC
         `
       : await sql`
-          SELECT pp.id, pp.photo_filename, ph.image_url, ph.original_url
-          FROM property_photos pp
-          JOIN photos ph ON ph.filename = pp.photo_filename
-          WHERE pp.property_id = ${propertyId}
-          ORDER BY pp.position ASC
+          SELECT id, room_id, zone, room_type, is_hero, position, blob_url
+          FROM assets
+          WHERE property_id = ${propertyId} AND kind = 'source'
+          ORDER BY position ASC
         `;
 
-    if (photoRows.length === 0) {
-      return NextResponse.json(
-        { error: roomId ? "No photos in this room — add photos first" : "No photos on this property — add photos first" },
-        { status: 400 }
+    // Fall back to property_photos if no assets found (legacy properties)
+    const useLegacy = assetRows.length === 0;
+
+    if (useLegacy) {
+      const photoRows = roomId
+        ? await sql`
+            SELECT pp.id, pp.photo_filename, ph.image_url, ph.original_url
+            FROM property_photos pp
+            JOIN photos ph ON ph.filename = pp.photo_filename
+            WHERE pp.property_id = ${propertyId} AND pp.room_id = ${roomId}
+            ORDER BY pp.position ASC
+          `
+        : await sql`
+            SELECT pp.id, pp.photo_filename, ph.image_url, ph.original_url
+            FROM property_photos pp
+            JOIN photos ph ON ph.filename = pp.photo_filename
+            WHERE pp.property_id = ${propertyId}
+            ORDER BY pp.position ASC
+          `;
+
+      if (photoRows.length === 0) {
+        return NextResponse.json(
+          { error: roomId ? "No photos in this room — add photos first" : "No photos on this property — add photos first" },
+          { status: 400 }
+        );
+      }
+
+      const batchId = genId();
+      await sql`
+        INSERT INTO batches (id, property_id, org_id, status, model, created_by)
+        VALUES (${batchId}, ${propertyId}, ${orgId}, 'queued', ${model}, ${uid})
+      `;
+
+      await Promise.all(
+        photoRows.map(async (photo) => {
+          const itemId = genId();
+          const originalUrl = (photo.image_url as string | null) ?? "";
+          await sql`
+            INSERT INTO batch_items (id, batch_id, property_photo_id, status, original_url)
+            VALUES (${itemId}, ${batchId}, ${photo.id as string}, 'queued', ${originalUrl})
+          `;
+        })
       );
+
+      await sql`UPDATE properties SET status = 'queued' WHERE id = ${propertyId}`;
+      await inngest.send({ name: "batch/run", data: { batchId } });
+      return NextResponse.json({ batchId }, { status: 202 });
     }
 
-    // Create the batch record
+    // Unified path: create batch + pre-create generation records
     const batchId = genId();
     await sql`
-      INSERT INTO batches (id, property_id, org_id, status, model)
-      VALUES (${batchId}, ${propertyId}, ${orgId}, 'queued', ${model})
+      INSERT INTO batches (id, property_id, org_id, status, model, room_id, created_by)
+      VALUES (${batchId}, ${propertyId}, ${orgId}, 'queued', ${model}, ${roomId}, ${uid})
     `;
 
-    // Create batch_items for each photo
-    await Promise.all(
-      photoRows.map(async (photo) => {
-        const itemId = genId();
-        const originalUrl = (photo.image_url as string | null) ?? "";
-        await sql`
-          INSERT INTO batch_items (id, batch_id, property_photo_id, status, original_url)
-          VALUES (${itemId}, ${batchId}, ${photo.id as string}, 'queued', ${originalUrl})
-        `;
-      })
-    );
+    // Create a generation per asset, sequenced within each room
+    const roomSeqCounters: Record<string, number> = {};
+    for (const asset of assetRows) {
+      const assetRoomId = (asset.room_id as string | null) ?? "__no_room__";
+      const seqIdx = roomSeqCounters[assetRoomId] ?? 0;
+      roomSeqCounters[assetRoomId] = seqIdx + 1;
 
-    // Update property status to queued
+      const genRowId = genId();
+      await sql`
+        INSERT INTO generations (
+          id, org_id, property_id, room_id, source_asset_id, batch_id,
+          sequence_index, status, created_by
+        ) VALUES (
+          ${genRowId}, ${orgId}, ${propertyId},
+          ${asset.room_id as string | null},
+          ${asset.id as string},
+          ${batchId},
+          ${seqIdx},
+          'queued',
+          ${uid}
+        )
+      `;
+    }
+
     await sql`UPDATE properties SET status = 'queued' WHERE id = ${propertyId}`;
-
-    // Fire the Inngest event
     await inngest.send({ name: "batch/run", data: { batchId } });
 
     return NextResponse.json({ batchId }, { status: 202 });

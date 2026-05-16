@@ -2,6 +2,7 @@ import { createContext } from "react";
 
 export interface CanvasContextValue {
   sessionId: string;
+  propertyId?: string;
   readOnly: boolean;
   isDemo: boolean;
 }
