@@ -201,6 +201,8 @@ export function RoomCard({
   function handleFileDrop(e: React.DragEvent) {
     e.preventDefault();
     setFileDragOver(false);
+    // Reject native image drags (browser populates uri-list, not Files)
+    if (!e.dataTransfer.types.includes("Files")) return;
     if (e.dataTransfer.files?.length) uploadFiles(e.dataTransfer.files);
   }
 
@@ -362,11 +364,10 @@ export function RoomCard({
 
 // ─── Draggable photo row ──────────────────────────────────────────────────────
 
-function sizedUrl(url: string | null | undefined, w: number): string | null {
+function blobProxyUrl(url: string | null | undefined, w: number): string | null {
   if (!url) return null;
   if (!url.startsWith("http")) return url;
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}width=${w}`;
+  return `/api/blob-proxy?url=${encodeURIComponent(url)}&w=${w}`;
 }
 
 function DraggablePhotoRow({
@@ -383,6 +384,7 @@ function DraggablePhotoRow({
   return (
     <div
       ref={setNodeRef}
+      draggable={false}
       className={`grid grid-cols-[20px_1fr_1fr] gap-2 items-stretch transition-opacity ${isDragging ? "opacity-30" : "opacity-100"}`}
     >
       {/* Drag handle */}
@@ -401,6 +403,7 @@ function DraggablePhotoRow({
           <img
             src={`/api/photos/${encodeURIComponent(photo.photo_filename)}?w=600`}
             alt={photo.photo_filename}
+            draggable={false}
             loading="lazy"
             decoding="async"
             className="w-full h-full object-cover"
@@ -438,8 +441,9 @@ function DraggablePhotoRow({
         {photo.stagedUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={sizedUrl(photo.stagedUrl, 600) ?? undefined}
+            src={blobProxyUrl(photo.stagedUrl, 600) ?? undefined}
             alt={`${photo.photo_filename} staged`}
+            draggable={false}
             loading="lazy"
             decoding="async"
             className="w-full h-full object-cover"
