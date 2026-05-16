@@ -318,10 +318,11 @@ export function RoomCard({
         {/* Zone header */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-stone-100">
           {hasPhotos ? (
-            <div className="grid grid-cols-[20px_1fr_1fr] gap-2 flex-1 mr-3">
+            <div className="grid grid-cols-[20px_1fr_1fr_20px] gap-2 flex-1 mr-3">
               <div />
               <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">Unfurnished</p>
               <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">Furnished</p>
+              <div />
             </div>
           ) : (
             <div className="flex-1" />
@@ -385,7 +386,7 @@ function DraggablePhotoRow({
     <div
       ref={setNodeRef}
       draggable={false}
-      className={`grid grid-cols-[20px_1fr_1fr] gap-2 items-stretch transition-opacity ${isDragging ? "opacity-30" : "opacity-100"}`}
+      className={`grid grid-cols-[20px_1fr_1fr_20px] gap-2 items-center transition-opacity ${isDragging ? "opacity-30" : "opacity-100"}`}
     >
       {/* Drag handle */}
       <div
@@ -397,7 +398,7 @@ function DraggablePhotoRow({
       </div>
 
       {/* Unfurnished */}
-      <div className="group relative rounded-lg overflow-hidden border border-stone-200 bg-white aspect-[4/3]">
+      <div className="relative rounded-lg overflow-hidden border border-stone-200 bg-white aspect-[4/3]">
         {photo.image_url || photo.original_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -419,21 +420,6 @@ function DraggablePhotoRow({
             Hero
           </span>
         )}
-        <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  onClick={() => onRemove(photo.id)}
-                  className="flex items-center justify-center w-6 h-6 rounded-md bg-white/90 border border-stone-200 text-stone-400 hover:text-clay-600 hover:border-clay-300 hover:bg-clay-50 backdrop-blur-sm transition-colors"
-                >
-                  <Trash2 size={11} />
-                </button>
-              }
-            />
-            <TooltipContent>Remove photo</TooltipContent>
-          </Tooltip>
-        </div>
       </div>
 
       {/* Furnished */}
@@ -467,13 +453,28 @@ function DraggablePhotoRow({
           </div>
         )}
       </div>
+
+      {/* Delete */}
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              onClick={() => onRemove(photo.id)}
+              className="flex items-center justify-center w-5 h-5 rounded text-stone-300 hover:text-clay-600 hover:bg-clay-50 transition-colors"
+            >
+              <Trash2 size={11} />
+            </button>
+          }
+        />
+        <TooltipContent>Remove photo</TooltipContent>
+      </Tooltip>
     </div>
   );
 }
 
 function UploadingRow({ objectUrl }: { objectUrl: string }) {
   return (
-    <div className="grid grid-cols-[20px_1fr_1fr] gap-2 items-stretch">
+    <div className="grid grid-cols-[20px_1fr_1fr_20px] gap-2 items-center">
       <div />
       <div className="relative rounded-lg overflow-hidden border border-stone-200 bg-stone-100 aspect-[4/3]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -483,6 +484,7 @@ function UploadingRow({ objectUrl }: { objectUrl: string }) {
         </div>
       </div>
       <div className="rounded-lg border border-stone-200 bg-stone-50 aspect-[4/3]" />
+      <div />
     </div>
   );
 }
