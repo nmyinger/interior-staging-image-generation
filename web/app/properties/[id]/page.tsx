@@ -6,11 +6,10 @@ import Link from "next/link";
 import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
 import { RoomCard } from "@/components/properties/RoomCard";
 import type { PropertyPhoto, PropertyRoom } from "@/components/properties/RoomCard";
-import { BatchProgress } from "@/components/properties/BatchProgress";
+import { BatchPoller } from "@/components/properties/BatchProgress";
 import type { BatchItem } from "@/components/properties/BatchProgress";
 import { StatusBadge } from "@/components/properties/StatusBadge";
 import type { PropertyStatus } from "@/components/properties/StatusBadge";
-import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
   Loader2,
@@ -248,6 +247,10 @@ export default function PropertyDetailPage() {
         return;
       }
       const { batchId } = await res.json();
+      // Immediately show "queued" in each photo's Furnished cell
+      setPhotos((prev) =>
+        prev.map((p) => (p.room_id === roomId ? { ...p, batchStatus: "queued" as const } : p))
+      );
       setRoomBatches((prev) => ({ ...prev, [roomId]: batchId }));
       setProperty((p) => (p ? { ...p, status: "queued" } : p));
     } finally {
@@ -256,8 +259,7 @@ export default function PropertyDetailPage() {
   }
 
   async function stageAll() {
-    const allPhotos = photos;
-    if (allPhotos.length === 0) return;
+    if (photos.length === 0) return;
     setAllStaging(true);
     try {
       const res = await fetch(`/api/properties/${propertyId}/batches`, {
@@ -271,6 +273,7 @@ export default function PropertyDetailPage() {
         return;
       }
       const { batchId } = await res.json();
+      setPhotos((prev) => prev.map((p) => ({ ...p, batchStatus: "queued" as const })));
       setAllBatchId(batchId);
       setProperty((p) => (p ? { ...p, status: "queued" } : p));
     } finally {
@@ -278,12 +281,26 @@ export default function PropertyDetailPage() {
     }
   }
 
+  // Called by BatchPoller on every poll cycle — updates per-photo status in real time
+  function handleBatchUpdate(items: BatchItem[]) {
+    setPhotos((prev) =>
+      prev.map((photo) => {
+        const item = items.find((i) => i.photo_filename === photo.photo_filename);
+        if (!item) return photo;
+        return {
+          ...photo,
+          batchStatus: item.status as PropertyPhoto["batchStatus"],
+          ...(item.staged_url ? { stagedUrl: item.staged_url } : {}),
+        };
+      })
+    );
+  }
+
   function handleRoomBatchComplete(roomId: string, items: BatchItem[]) {
-    // Update photos with their staged URLs
     setPhotos((prev) =>
       prev.map((photo) => {
         const match = items.find((i) => i.photo_filename === photo.photo_filename);
-        if (match?.staged_url) return { ...photo, stagedUrl: match.staged_url, batchStatus: "done" };
+        if (match?.staged_url) return { ...photo, stagedUrl: match.staged_url, batchStatus: "done" as const };
         return photo;
       })
     );
@@ -300,7 +317,7 @@ export default function PropertyDetailPage() {
     setPhotos((prev) =>
       prev.map((photo) => {
         const match = items.find((i) => i.photo_filename === photo.photo_filename);
-        if (match?.staged_url) return { ...photo, stagedUrl: match.staged_url, batchStatus: "done" };
+        if (match?.staged_url) return { ...photo, stagedUrl: match.staged_url, batchStatus: "done" as const };
         return photo;
       })
     );
@@ -464,7 +481,6 @@ export default function PropertyDetailPage() {
                   onRoomUpdate={handleRoomUpdate}
                   onRoomDelete={handleRoomDelete}
                   onStage={() => stageRoom(room.id)}
-                  onBatchComplete={(items) => handleRoomBatchComplete(room.id, items)}
                 />
               ))
             )}
@@ -512,15 +528,21 @@ export default function PropertyDetailPage() {
           </div>
         )}
 
-        {/* All-rooms batch progress */}
+        {/* Headless pollers — one per active room batch + one for all-rooms */}
+        {Object.entries(roomBatches).map(([roomId, batchId]) => (
+          <BatchPoller
+            key={batchId}
+            batchId={batchId}
+            onUpdate={handleBatchUpdate}
+            onComplete={(items) => handleRoomBatchComplete(roomId, items)}
+          />
+        ))}
         {allBatchId && (
-          <div className="mt-4">
-            <BatchProgress
-              batchId={allBatchId}
-              totalPhotos={allPhotosCount}
-              onComplete={handleAllBatchComplete}
-            />
-          </div>
+          <BatchPoller
+            batchId={allBatchId}
+            onUpdate={handleBatchUpdate}
+            onComplete={handleAllBatchComplete}
+          />
         )}
 
         {/* ── Canvases ─────────────────────────────────────────────────────── */}

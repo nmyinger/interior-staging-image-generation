@@ -233,3 +233,45 @@ export function BatchProgress({ batchId, totalPhotos, onComplete }: BatchProgres
     </div>
   );
 }
+
+// ─── BatchPoller — headless, renders nothing ──────────────────────────────────
+// Polls the batch API on an interval and surfaces per-item updates without any UI.
+
+interface BatchPollerProps {
+  batchId: string;
+  onUpdate: (items: BatchItem[]) => void;
+  onComplete: (items: BatchItem[]) => void;
+}
+
+export function BatchPoller({ batchId, onUpdate, onComplete }: BatchPollerProps) {
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+  const calledComplete = useRef(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    async function poll() {
+      try {
+        const res = await fetch(`/api/batches/${batchId}`);
+        if (!res.ok) return;
+        const json: BatchData = await res.json();
+        onUpdateRef.current(json.items);
+        if ((json.status === "done" || json.status === "failed") && !calledComplete.current) {
+          calledComplete.current = true;
+          if (intervalRef.current) clearInterval(intervalRef.current);
+          onCompleteRef.current(json.items);
+        }
+      } catch {
+        // transient — keep polling
+      }
+    }
+
+    poll();
+    intervalRef.current = setInterval(poll, 3000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [batchId]);
+
+  return null;
+}

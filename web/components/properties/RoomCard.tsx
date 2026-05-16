@@ -15,9 +15,6 @@ import {
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { StatusBadge } from "./StatusBadge";
-import { BatchProgress } from "./BatchProgress";
-import type { BatchItem } from "./BatchProgress";
 
 // ─── Shared types (exported for page.tsx) ────────────────────────────────────
 
@@ -55,7 +52,6 @@ interface RoomCardProps {
   onRoomUpdate: (updated: PropertyRoom) => void;
   onRoomDelete: (roomId: string) => void;
   onStage: () => void;
-  onBatchComplete: (items: BatchItem[]) => void;
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -92,7 +88,6 @@ export function RoomCard({
   onRoomUpdate,
   onRoomDelete,
   onStage,
-  onBatchComplete,
 }: RoomCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -216,15 +211,6 @@ export function RoomCard({
       setFileDragOver(true);
     }
   }
-
-  // ── Batch complete ──────────────────────────────────────────────────────────
-
-  const handleBatchComplete = useCallback(
-    (items: BatchItem[]) => {
-      onBatchComplete(items);
-    },
-    [onBatchComplete]
-  );
 
   // ── Drop zone highlight ─────────────────────────────────────────────────────
   const dropBorderClass = isOver
@@ -370,16 +356,6 @@ export function RoomCard({
         )}
       </div>
 
-      {/* ── Batch progress ───────────────────────────────────────────────── */}
-      {activeBatchId && (
-        <div className="px-4 pb-4">
-          <BatchProgress
-            batchId={activeBatchId}
-            totalPhotos={photos.length}
-            onComplete={handleBatchComplete}
-          />
-        </div>
-      )}
     </div>
   );
 }
@@ -455,11 +431,6 @@ function DraggablePhotoRow({
             <TooltipContent>Remove photo</TooltipContent>
           </Tooltip>
         </div>
-        {photo.batchStatus && photo.batchStatus !== "done" && (
-          <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-            <StatusBadge status={photo.batchStatus} />
-          </div>
-        )}
       </div>
 
       {/* Furnished */}
@@ -473,6 +444,18 @@ function DraggablePhotoRow({
             decoding="async"
             className="w-full h-full object-cover"
           />
+        ) : photo.batchStatus && photo.batchStatus !== "done" && photo.batchStatus !== "failed" ? (
+          <div className="flex flex-col items-center gap-2 text-sage-400">
+            <Loader2 size={20} className="animate-spin" />
+            <span className="text-[10px]">
+              {photo.batchStatus === "analyzing" ? "Analyzing…" : photo.batchStatus === "generating" ? "Generating…" : "Queued…"}
+            </span>
+          </div>
+        ) : photo.batchStatus === "failed" ? (
+          <div className="flex flex-col items-center gap-1.5 text-clay-400">
+            <ImageIcon size={20} strokeWidth={1.25} />
+            <span className="text-[10px]">Failed</span>
+          </div>
         ) : (
           <div className="flex flex-col items-center gap-1.5 text-stone-300">
             <ImageIcon size={20} strokeWidth={1.25} />
