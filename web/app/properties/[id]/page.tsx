@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { DndContext, DragOverlay, closestCenter, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
 import { RoomCard } from "@/components/properties/RoomCard";
 import type { PropertyPhoto, PropertyRoom } from "@/components/properties/RoomCard";
 import { BatchPoller } from "@/components/properties/BatchProgress";
@@ -211,24 +212,54 @@ export default function PropertyDetailPage() {
   async function handleDragEnd(event: DragEndEvent) {
     setActiveDragPhoto(null);
     const { active, over } = event;
-    if (!over) return;
+    if (!over || active.id === over.id) return;
 
     const photoId = active.id as string;
-    const targetRoomId = over.id as string;
+    const overId = over.id as string;
 
-    const photo = photos.find((p) => p.id === photoId);
-    if (!photo || photo.room_id === targetRoomId) return;
+    const sourcePhoto = photos.find((p) => p.id === photoId);
+    if (!sourcePhoto) return;
 
-    // Optimistic update
-    setPhotos((prev) =>
-      prev.map((p) => (p.id === photoId ? { ...p, room_id: targetRoomId } : p))
-    );
+    const targetIsRoom = rooms.some((r) => r.id === overId);
+    const targetPhoto = !targetIsRoom ? photos.find((p) => p.id === overId) : null;
+    const targetRoomId = targetIsRoom ? overId : (targetPhoto?.room_id ?? null);
 
-    await fetch(`/api/properties/${propertyId}/photos`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ photoId, roomId: targetRoomId }),
-    });
+    if (!targetRoomId) return;
+
+    if (sourcePhoto.room_id === targetRoomId) {
+      // ── Same room: reorder ──────────────────────────────────────────────
+      if (!targetPhoto) return; // dropped on room droppable, same room — no-op
+      const roomPhotos = photos.filter((p) => p.room_id === sourcePhoto.room_id);
+      const oldIndex = roomPhotos.findIndex((p) => p.id === photoId);
+      const newIndex = roomPhotos.findIndex((p) => p.id === overId);
+      if (oldIndex === newIndex) return;
+
+      const reordered = arrayMove(roomPhotos, oldIndex, newIndex).map((p, i) => ({
+        ...p,
+        position: i,
+      }));
+      setPhotos((prev) => [
+        ...prev.filter((p) => p.room_id !== sourcePhoto.room_id),
+        ...reordered,
+      ]);
+      await fetch(`/api/properties/${propertyId}/photos`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          positions: reordered.map((p) => ({ id: p.id, position: p.position })),
+        }),
+      });
+    } else {
+      // ── Different room: move ────────────────────────────────────────────
+      setPhotos((prev) =>
+        prev.map((p) => (p.id === photoId ? { ...p, room_id: targetRoomId } : p))
+      );
+      await fetch(`/api/properties/${propertyId}/photos`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photoId, roomId: targetRoomId }),
+      });
+    }
   }
 
   // ── Staging ─────────────────────────────────────────────────────────────────
@@ -444,6 +475,7 @@ export default function PropertyDetailPage() {
 
         {/* ── Rooms ──────────────────────────────────────────────────────────── */}
         <DndContext
+          collisionDetection={closestCenter}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onDragCancel={() => setActiveDragPhoto(null)}

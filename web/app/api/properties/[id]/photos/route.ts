@@ -33,6 +33,18 @@ export async function PATCH(
     if (!property) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     const body = await req.json();
+
+    // Bulk position update: { positions: [{ id, position }] }
+    if (Array.isArray(body.positions)) {
+      const positions = body.positions as Array<{ id: string; position: number }>;
+      await Promise.all(
+        positions.map(({ id, position }) =>
+          sql`UPDATE property_photos SET position = ${position} WHERE id = ${id} AND property_id = ${propertyId}`
+        )
+      );
+      return NextResponse.json({ ok: true });
+    }
+
     const photoId: string | undefined = body.photoId;
     if (!photoId) return NextResponse.json({ error: "photoId is required" }, { status: 400 });
 

@@ -1,7 +1,9 @@
 "use client";
 
 import { useRef, useState, useCallback } from "react";
-import { useDroppable, useDraggable } from "@dnd-kit/core";
+import { useDroppable } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Upload,
   Star,
@@ -340,13 +342,15 @@ export function RoomCard({
         {/* Photo rows */}
         {hasPhotos ? (
           <div className="p-2 space-y-2">
-            {photos.map((photo) => (
-              <DraggablePhotoRow
-                key={photo.id}
-                photo={photo}
-                onRemove={onPhotoRemove}
-              />
-            ))}
+            <SortableContext items={photos.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+              {photos.map((photo) => (
+                <DraggablePhotoRow
+                  key={photo.id}
+                  photo={photo}
+                  onRemove={onPhotoRemove}
+                />
+              ))}
+            </SortableContext>
             {pendingPreviews.map((p) => (
               <UploadingRow key={p.tempId} objectUrl={p.objectUrl} />
             ))}
@@ -378,15 +382,21 @@ function DraggablePhotoRow({
   photo: PropertyPhoto;
   onRemove: (id: string) => void;
 }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: photo.id,
   });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
 
   return (
     <div
       ref={setNodeRef}
+      style={style}
       draggable={false}
-      className={`grid grid-cols-[20px_1fr_1fr_20px] gap-2 items-center transition-opacity ${isDragging ? "opacity-30" : "opacity-100"}`}
+      className={`grid grid-cols-[20px_1fr_1fr_20px] gap-2 items-center ${isDragging ? "opacity-30" : "opacity-100"}`}
     >
       {/* Drag handle */}
       <div
