@@ -179,9 +179,13 @@ export function BatchProgress({ batchId, totalPhotos, onComplete }: BatchProgres
                 <img
                   src={
                     item.staged_url
-                      ? `/api/blob-proxy?url=${encodeURIComponent(item.staged_url)}&w=120`
+                      ? item.staged_url.includes("/api/assets/")
+                        ? item.staged_url
+                        : `/api/blob-proxy?url=${encodeURIComponent(item.staged_url)}&w=120`
                       : item.original_url
-                      ? `/api/blob-proxy?url=${encodeURIComponent(item.original_url)}&w=120`
+                      ? item.original_url.includes("/api/assets/")
+                        ? item.original_url
+                        : `/api/blob-proxy?url=${encodeURIComponent(item.original_url)}&w=120`
                       : item.photo_filename
                       ? `/api/photos/${encodeURIComponent(item.photo_filename)}?w=120`
                       : undefined
