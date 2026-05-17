@@ -100,7 +100,8 @@ export function CanvasHeader({ canvasId, initialName, ownerUserId, propertyId, r
         )}
 
         <div className="ml-auto flex items-center gap-3">
-          {isOwner && (
+          {/* Share only available on session canvases — property sharing is on the property page */}
+          {isOwner && canvasId !== propertyId && (
             <button
               onClick={() => setShowShareModal(true)}
               className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-stone-700 transition-colors"
