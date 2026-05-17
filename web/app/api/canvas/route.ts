@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json() as {
     propertyId?: string;
     sessionId?: string;
-    nodes: Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }>;
+    nodes: Array<{ id: string; type: string; position?: { x: number; y: number }; x?: number; y?: number; data: Record<string, unknown> }>;
     edges: Array<{ id: string; source: string; sourceHandle: string; target: string; targetHandle: string }>;
   };
 
@@ -219,9 +219,11 @@ export async function POST(req: NextRequest) {
   for (const n of nodes) {
     const kind = n.type === "photo" ? "asset" : "generation";
     const entityId = (n.data.assetId ?? n.data.generationId ?? n.id) as string;
+    const nx = n.position?.x ?? n.x ?? 0;
+    const ny = n.position?.y ?? n.y ?? 0;
     await sql`
       INSERT INTO canvas_layouts (property_id, entity_kind, entity_id, x, y)
-      VALUES (${propertyId}, ${kind}, ${entityId}, ${n.position.x}, ${n.position.y})
+      VALUES (${propertyId}, ${kind}, ${entityId}, ${nx}, ${ny})
       ON CONFLICT (property_id, entity_kind, entity_id)
         DO UPDATE SET x = EXCLUDED.x, y = EXCLUDED.y
     `;

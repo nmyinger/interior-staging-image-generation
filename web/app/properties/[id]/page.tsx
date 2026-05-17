@@ -312,11 +312,20 @@ export default function PropertyDetailPage() {
     }
   }
 
+  // Detect whether items are from the unified model (no photo_filename)
+  function isUnifiedItems(items: BatchItem[]): boolean {
+    return items.length > 0 && items.every((i) => !i.photo_filename);
+  }
+
   // Called by BatchPoller on every poll cycle — updates per-photo status in real time
   function handleBatchUpdate(items: BatchItem[]) {
     setPhotos((prev) =>
       prev.map((photo) => {
-        const item = items.find((i) => i.photo_filename === photo.photo_filename);
+        const item = items.find((i) =>
+          i.photo_filename
+            ? i.photo_filename === photo.photo_filename
+            : i.original_url && i.original_url === photo.image_url
+        );
         if (!item) return photo;
         return {
           ...photo,
@@ -330,7 +339,11 @@ export default function PropertyDetailPage() {
   function handleRoomBatchComplete(roomId: string, items: BatchItem[]) {
     setPhotos((prev) =>
       prev.map((photo) => {
-        const match = items.find((i) => i.photo_filename === photo.photo_filename);
+        const match = items.find((i) =>
+          i.photo_filename
+            ? i.photo_filename === photo.photo_filename
+            : i.original_url && i.original_url === photo.image_url
+        );
         if (match?.staged_url) return { ...photo, stagedUrl: match.staged_url, batchStatus: "done" as const };
         return photo;
       })
@@ -341,20 +354,36 @@ export default function PropertyDetailPage() {
       return next;
     });
     setProperty((p) => (p ? { ...p, status: "done" } : p));
-    autoCreateCanvas(items);
+    if (isUnifiedItems(items)) {
+      toast.success("Staging complete — open the canvas to view results", {
+        action: { label: "Open canvas", onClick: () => router.push(`/properties/${propertyId}/canvas`) },
+      });
+    } else {
+      autoCreateCanvas(items);
+    }
   }
 
   function handleAllBatchComplete(items: BatchItem[]) {
     setPhotos((prev) =>
       prev.map((photo) => {
-        const match = items.find((i) => i.photo_filename === photo.photo_filename);
+        const match = items.find((i) =>
+          i.photo_filename
+            ? i.photo_filename === photo.photo_filename
+            : i.original_url && i.original_url === photo.image_url
+        );
         if (match?.staged_url) return { ...photo, stagedUrl: match.staged_url, batchStatus: "done" as const };
         return photo;
       })
     );
     setAllBatchId(null);
     setProperty((p) => (p ? { ...p, status: "done" } : p));
-    autoCreateCanvas(items);
+    if (isUnifiedItems(items)) {
+      toast.success("Staging complete — open the canvas to view results", {
+        action: { label: "Open canvas", onClick: () => router.push(`/properties/${propertyId}/canvas`) },
+      });
+    } else {
+      autoCreateCanvas(items);
+    }
   }
 
   async function autoCreateCanvas(items: BatchItem[]) {
@@ -591,45 +620,40 @@ export default function PropertyDetailPage() {
             </button>
           </div>
 
-          {canvases.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 gap-3 bg-white rounded-2xl border border-stone-200">
-              <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center">
-                <Frame size={18} strokeWidth={1.25} className="text-stone-400" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {/* Unified property canvas — always present */}
+            <Link
+              href={`/properties/${propertyId}/canvas`}
+              className="flex items-center gap-3 bg-sage-50 rounded-xl border border-sage-200 hover:border-sage-300 hover:shadow-sm transition-all p-4 min-w-0"
+            >
+              <div className="w-8 h-8 rounded-lg bg-sage-100 border border-sage-200 flex items-center justify-center shrink-0">
+                <Frame size={14} className="text-sage-600" />
               </div>
-              <div className="text-center">
-                <p className="text-sm font-medium text-stone-600">No canvases yet</p>
-                <p className="text-xs text-stone-400 mt-0.5">Create a canvas for interactive, photo-by-photo staging</p>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-sage-900 truncate">Property canvas</p>
+                <p className="text-[11px] text-sage-600">Unified — all photos &amp; generations</p>
               </div>
-              <button
-                onClick={createCanvas}
-                disabled={creatingCanvas}
-                className="flex items-center gap-1.5 text-sm font-medium text-white bg-sage-600 hover:bg-sage-700 rounded-lg px-4 py-2 transition-colors shadow-sm"
+            </Link>
+
+            {/* Legacy session-based canvases */}
+            {canvases.map((canvas) => (
+              <Link
+                key={canvas.id}
+                href={`/canvas/${canvas.id}`}
+                className="flex items-center gap-3 bg-white rounded-xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all p-4 min-w-0"
               >
-                {creatingCanvas ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-                New canvas
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {canvases.map((canvas) => (
-                <Link
-                  key={canvas.id}
-                  href={`/canvas/${canvas.id}`}
-                  className="flex items-center gap-3 bg-white rounded-xl border border-stone-200 hover:border-stone-300 hover:shadow-sm transition-all p-4 min-w-0"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-sage-50 border border-sage-200 flex items-center justify-center shrink-0">
-                    <Frame size={14} className="text-sage-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-stone-800 truncate">{canvas.name}</p>
-                    <p className="text-[11px] text-stone-400">
-                      {new Date(canvas.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
+                <div className="w-8 h-8 rounded-lg bg-stone-50 border border-stone-200 flex items-center justify-center shrink-0">
+                  <Frame size={14} className="text-stone-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-stone-800 truncate">{canvas.name}</p>
+                  <p className="text-[11px] text-stone-400">
+                    {new Date(canvas.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
 
       </div>
