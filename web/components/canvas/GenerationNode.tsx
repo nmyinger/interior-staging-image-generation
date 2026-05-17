@@ -168,7 +168,11 @@ export const GenerationNode = memo(function GenerationNode({ id, data, selected 
         <div className="border-t border-sage-100">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={outputUrl.startsWith("http") ? `/api/blob-proxy?url=${encodeURIComponent(outputUrl)}&w=600` : outputUrl}
+            src={
+              outputUrl.includes("/api/assets/") || !outputUrl.startsWith("http")
+                ? outputUrl
+                : `/api/blob-proxy?url=${encodeURIComponent(outputUrl)}&w=600`
+            }
             alt="staged"
             loading="lazy"
             className="w-full max-h-48 object-cover block"

@@ -20,14 +20,17 @@ function largerUrl(url: string | undefined): string | undefined {
   if (!url) return undefined;
   if (url.startsWith("blob:") || url.startsWith("data:")) return url;
   if (url.startsWith("/api/photos/")) return url.replace(/[?&]w=\d+/, "") + "?w=600";
-  if (url.startsWith("http")) return `/api/blob-proxy?url=${encodeURIComponent(url)}&w=600`;
+  if (url.startsWith("http") && !url.includes("/api/assets/"))
+    return `/api/blob-proxy?url=${encodeURIComponent(url)}&w=600`;
   return url;
 }
 
 function displayProxySrc(url: string | undefined): string | undefined {
   if (!url) return undefined;
   if (url.startsWith("data:") || url.startsWith("blob:")) return url;
-  if (url.startsWith("http")) return `/api/blob-proxy?url=${encodeURIComponent(url)}&w=800`;
+  // Inline dev asset URLs are served directly — blob-proxy rejects non-blob hostnames
+  if (url.startsWith("http") && !url.includes("/api/assets/"))
+    return `/api/blob-proxy?url=${encodeURIComponent(url)}&w=800`;
   return url;
 }
 

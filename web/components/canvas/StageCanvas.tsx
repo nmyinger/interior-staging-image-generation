@@ -142,7 +142,9 @@ export function StageCanvas({ sessionId, propertyId, readOnly, isDemo }: { sessi
           const blobUrl = n.data.blobUrl as string | undefined;
           const filename = n.data.filename as string | undefined;
           const photoUrl = blobUrl
-            ? `/api/blob-proxy?url=${encodeURIComponent(blobUrl)}&w=300`
+            ? blobUrl.includes("/api/assets/")
+              ? blobUrl  // inline dev URL — serve directly, not via blob-proxy
+              : `/api/blob-proxy?url=${encodeURIComponent(blobUrl)}&w=300`
             : filename
             ? `/api/photos/${encodeURIComponent(filename)}?w=300`
             : undefined;
@@ -158,8 +160,14 @@ export function StageCanvas({ sessionId, propertyId, readOnly, isDemo }: { sessi
         } else {
           const outputUrl = n.data.outputUrl as string | undefined;
           const outputB64 = n.data.outputB64 as string | undefined;
+          // Inline dev URLs (contain /api/assets/) are served directly — don't route through
+          // blob-proxy which only allows *.blob.vercel-storage.com hostnames.
           const outputImageUrl = outputUrl
-            ? (outputUrl.startsWith("http") ? `/api/blob-proxy?url=${encodeURIComponent(outputUrl)}&w=600` : outputUrl)
+            ? outputUrl.includes("/api/assets/")
+              ? outputUrl
+              : outputUrl.startsWith("http")
+              ? `/api/blob-proxy?url=${encodeURIComponent(outputUrl)}&w=600`
+              : outputUrl
             : outputB64 ? `data:image/jpeg;base64,${outputB64}` : undefined;
           const data: GenerationNodeData = {
             prompt: (n.data.prompt as string) ?? "",
