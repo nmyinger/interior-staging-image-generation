@@ -12,6 +12,7 @@ import {
   Settings,
   KeyRound,
   LogOut,
+  Wand2,
 } from "lucide-react";
 
 interface NavItem {
@@ -21,6 +22,7 @@ interface NavItem {
 }
 
 const WORKSPACE_NAV: NavItem[] = [
+  { href: "/quick-stage", label: "Quick Stage", icon: Wand2 },
   { href: "/properties", label: "Properties", icon: Building2 },
   { href: "/canvases", label: "Canvases", icon: Layers },
 ];
