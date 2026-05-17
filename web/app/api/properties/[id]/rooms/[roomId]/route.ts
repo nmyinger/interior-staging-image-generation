@@ -38,12 +38,15 @@ export async function PATCH(
 
     if (typeof body.name === "string" && body.name.trim()) {
       await sql`UPDATE property_rooms SET name = ${body.name.trim()} WHERE id = ${roomId}`;
+      await sql`UPDATE rooms SET name = ${body.name.trim()} WHERE id = ${roomId}`;
     }
     if (typeof body.prompt === "string") {
       await sql`UPDATE property_rooms SET prompt = ${body.prompt} WHERE id = ${roomId}`;
+      await sql`UPDATE rooms SET prompt = ${body.prompt} WHERE id = ${roomId}`;
     }
     if (typeof body.position === "number") {
       await sql`UPDATE property_rooms SET position = ${body.position} WHERE id = ${roomId}`;
+      await sql`UPDATE rooms SET position = ${body.position} WHERE id = ${roomId}`;
     }
 
     const rows = await sql`
@@ -71,6 +74,7 @@ export async function DELETE(
     if (!room) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     await sql`DELETE FROM property_rooms WHERE id = ${roomId}`;
+    await sql`DELETE FROM rooms WHERE id = ${roomId}`;
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

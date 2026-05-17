@@ -69,6 +69,12 @@ export async function POST(
       INSERT INTO property_rooms (id, property_id, name, prompt, position)
       VALUES (${roomId}, ${id}, ${name}, '', ${position})
     `;
+    // Keep unified rooms table in sync
+    await sql`
+      INSERT INTO rooms (id, property_id, name, prompt, position)
+      VALUES (${roomId}, ${id}, ${name}, '', ${position})
+      ON CONFLICT (id) DO NOTHING
+    `;
 
     const rows = await sql`
       SELECT id, name, prompt, position, created_at FROM property_rooms WHERE id = ${roomId}

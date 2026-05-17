@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql, genId } from "@/lib/db";
-import { storeInlineAsset } from "@/lib/storage";
 
 function getUid(session: unknown): string | null {
   return (session as { user?: { id?: string } } | null)?.user?.id ?? null;
@@ -158,18 +157,16 @@ export async function POST(
     // Dual-write to unified assets table
     const assetId = "ast_pp_" + id;
     const orgId = property.org_id as string;
-    let assetBlobUrl = (photo.image_url as string | null) ?? null;
+    const imageUrl = (photo.image_url as string | null) ?? null;
+    const imageB64 = (photo.image_b64 as string | null) ?? null;
+    const mimeType = (photo.mime_type as string | null) ?? "image/jpeg";
 
-    // Dev fallback: if no blob URL, store the base64 inline so the asset survives reloads
-    if (!assetBlobUrl && photo.image_b64) {
-      assetBlobUrl = await storeInlineAsset(
-        assetId,
-        photo.image_b64 as string,
-        (photo.mime_type as string | null) ?? "image/jpeg"
-      );
-    }
+    // Dev fallback: use the inline asset URL as blob_url when Blob isn't configured
+    const inlineBase = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+    const assetBlobUrl = imageUrl ?? (imageB64 ? `${inlineBase}/api/assets/${assetId}/inline` : null);
 
     if (assetBlobUrl) {
+      // Insert asset first — asset_inline_data FK depends on this row existing
       await sql`
         INSERT INTO assets (id, org_id, property_id, room_id, kind, mime_type, blob_url, original_url,
                             zone, room_type, position, uploaded_by)
@@ -179,7 +176,7 @@ export async function POST(
           ${propertyId},
           ${roomId},
           'source',
-          ${(photo.mime_type as string | null) ?? "image/jpeg"},
+          ${mimeType},
           ${assetBlobUrl},
           ${(photo.original_url as string | null) ?? null},
           ${(photo.zone as string | null) ?? null},
@@ -189,6 +186,14 @@ export async function POST(
         )
         ON CONFLICT (id) DO NOTHING
       `;
+      // Store b64 payload for dev inline serving (no-op if imageUrl is set)
+      if (!imageUrl && imageB64) {
+        await sql`
+          INSERT INTO asset_inline_data (asset_id, mime_type, data_b64)
+          VALUES (${assetId}, ${mimeType}, ${imageB64})
+          ON CONFLICT (asset_id) DO UPDATE SET data_b64 = EXCLUDED.data_b64, mime_type = EXCLUDED.mime_type
+        `;
+      }
     }
 
     const rows = await sql`

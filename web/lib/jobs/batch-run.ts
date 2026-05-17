@@ -17,11 +17,22 @@ async function fetchB64(url: string): Promise<{ base64: string; mimeType: string
 }
 
 // ---------------------------------------------------------------------------
-// Fetch a photo's base64 from blob_url or property_photos fallback
+// Fetch a photo's base64 — handles Blob URLs, inline dev URLs, and 'data:pending'
 // ---------------------------------------------------------------------------
 async function assetToBase64(asset: Record<string, unknown>): Promise<{ base64: string; mimeType: string }> {
-  if (asset.blob_url) return fetchB64(asset.blob_url as string);
-  throw new Error(`Asset ${String(asset.id)} has no blob_url`);
+  const blobUrl = asset.blob_url as string | null | undefined;
+  // Inline dev assets (URL contains /api/assets/) and backfill placeholder ('data:pending')
+  // must be read from asset_inline_data rather than fetched over HTTP (no auth context here).
+  if (!blobUrl || blobUrl === "data:pending" || blobUrl.includes("/api/assets/")) {
+    const rows = await sql`
+      SELECT data_b64, mime_type FROM asset_inline_data WHERE asset_id = ${asset.id as string}
+    `;
+    if (rows[0]?.data_b64) {
+      return { base64: rows[0].data_b64 as string, mimeType: (rows[0].mime_type as string) ?? "image/jpeg" };
+    }
+    throw new Error(`Asset ${String(asset.id)} has no usable blob_url and no inline data`);
+  }
+  return fetchB64(blobUrl);
 }
 
 // Legacy helper for property_photos + photos fallback
@@ -181,10 +192,26 @@ Analyze the rooms present and return only the JSON, no other text.`,
 
       await Promise.all(
         Array.from(roomGroups.entries()).map(async ([roomKey, roomGens]) => {
+          // Sort by sequence_index so we chain in the right order within each room
+          const ordered = [...roomGens].sort(
+            (a, b) => ((a.sequence_index as number | null) ?? 0) - ((b.sequence_index as number | null) ?? 0)
+          );
           let prevOutputB64: string | null = null;
+          let prevOutputAssetId: string | null = null;
 
-          for (const gen of roomGens) {
+          for (const gen of ordered) {
             const genId_ = gen.id as string;
+
+            // Write reference edge BEFORE the step runs so the canvas shows the connection
+            // even while staging is in progress. Idempotent — safe on Inngest retries.
+            if (prevOutputAssetId) {
+              await sql`
+                INSERT INTO generation_inputs (generation_id, asset_id, role, ord)
+                VALUES (${genId_}, ${prevOutputAssetId}, 'reference', 0)
+                ON CONFLICT DO NOTHING
+              `;
+            }
+
             const result = await step.run(`gen-${genId_}`, async () => {
               await sql`
                 UPDATE generations SET status = 'running', started_at = NOW()
@@ -277,7 +304,7 @@ Rules:
                   WHERE id = ${genId_}
                 `;
 
-                return { outputB64 };
+                return { outputB64, outputAssetId: assetId };
               } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
                 await sql`
@@ -289,6 +316,7 @@ Rules:
             });
 
             prevOutputB64 = result?.outputB64 ?? null;
+            prevOutputAssetId = result?.outputAssetId ?? null;
           }
 
           void roomKey; // used for grouping only
