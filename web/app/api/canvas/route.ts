@@ -215,6 +215,42 @@ export async function POST(req: NextRequest) {
 
   const { nodes, edges } = body;
 
+  // Auto-create generation rows for any generation nodes that don't yet exist in the DB.
+  // This happens when the user clicks "Add Node" on a property canvas — the node gets a
+  // random client-side ID that needs a backing generations row to survive canvas reload.
+  const genNodes = nodes.filter(n => n.type === "generation");
+  if (genNodes.length > 0) {
+    const genNodeIds = genNodes.map(n => (n.data.generationId ?? n.id) as string);
+    const existingRows = await sql`
+      SELECT id FROM generations WHERE id = ANY(${genNodeIds}) AND property_id = ${propertyId}
+    `;
+    const existingIds = new Set((existingRows as { id: string }[]).map(r => r.id));
+
+    if (existingIds.size < genNodeIds.length) {
+      // Look up the org_id for this property
+      const propRows = await sql`SELECT org_id FROM properties WHERE id = ${propertyId}`;
+      const orgId = propRows[0]?.org_id as string | null;
+
+      for (const n of genNodes) {
+        const genId = (n.data.generationId ?? n.id) as string;
+        if (existingIds.has(genId)) continue;
+        // Insert a draft generation row — no source_asset_id yet (set when edges connect)
+        await sql`
+          INSERT INTO generations (id, org_id, property_id, status, prompt, created_by)
+          VALUES (
+            ${genId},
+            ${orgId},
+            ${propertyId},
+            'idle',
+            ${(n.data.prompt as string | null) ?? ""},
+            ${uid}
+          )
+          ON CONFLICT (id) DO NOTHING
+        `;
+      }
+    }
+  }
+
   // Persist canvas_layouts for all nodes
   for (const n of nodes) {
     const kind = n.type === "photo" ? "asset" : "generation";

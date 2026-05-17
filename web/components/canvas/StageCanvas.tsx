@@ -146,8 +146,10 @@ export function StageCanvas({ sessionId, propertyId, readOnly, isDemo }: { sessi
             : filename
             ? `/api/photos/${encodeURIComponent(filename)}?w=300`
             : undefined;
+          // Display label: real filename → room/zone label → asset ID
+          const roomLabel = (n.data.roomType as string | null) ?? (n.data.zone as string | null);
           const data: PhotoNodeData = {
-            filename: filename ?? (n.data.assetId as string) ?? n.id,
+            filename: filename ?? (roomLabel ? `${roomLabel} photo` : null) ?? (n.data.assetId as string) ?? n.id,
             photoUrl,
             assetId: (n.data.assetId as string) ?? undefined,
             blobUrl,
