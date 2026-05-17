@@ -231,22 +231,25 @@ export async function POST(req: NextRequest) {
       const propRows = await sql`SELECT org_id FROM properties WHERE id = ${propertyId}`;
       const orgId = propRows[0]?.org_id as string | null;
 
-      for (const n of genNodes) {
-        const genId = (n.data.generationId ?? n.id) as string;
-        if (existingIds.has(genId)) continue;
-        // Insert a draft generation row — no source_asset_id yet (set when edges connect)
-        await sql`
-          INSERT INTO generations (id, org_id, property_id, status, prompt, created_by)
-          VALUES (
-            ${genId},
-            ${orgId},
-            ${propertyId},
-            'idle',
-            ${(n.data.prompt as string | null) ?? ""},
-            ${uid}
-          )
-          ON CONFLICT (id) DO NOTHING
-        `;
+      // Skip auto-creation if org_id is unavailable — generations require it (NOT NULL)
+      if (orgId) {
+        for (const n of genNodes) {
+          const genId = (n.data.generationId ?? n.id) as string;
+          if (existingIds.has(genId)) continue;
+          // Insert a draft generation row — no source_asset_id yet (set when edges connect)
+          await sql`
+            INSERT INTO generations (id, org_id, property_id, status, prompt, created_by)
+            VALUES (
+              ${genId},
+              ${orgId},
+              ${propertyId},
+              'idle',
+              ${(n.data.prompt as string | null) ?? ""},
+              ${uid}
+            )
+            ON CONFLICT (id) DO NOTHING
+          `;
+        }
       }
     }
   }
