@@ -1,14 +1,17 @@
 "use client";
 
 import { useState, useRef, useCallback, DragEvent, ChangeEvent } from "react";
-import { AppHeader } from "@/components/AppHeader";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { SignInModal } from "@/components/SignInModal";
 import { GENERATION_MODELS, DEFAULT_MODEL_ID, type ModelId } from "@/lib/models";
 import { Loader2, X, Download, ImagePlus, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+type ReferenceMode = "same" | "different";
 
 // Layout constants — everything anchors to these
 const CARD_W = 260;
@@ -128,10 +131,9 @@ function ImageDropZone({ label, sublabel, image, onImage, onClear }: DropZonePro
 // ─── Converging Arrows SVG ────────────────────────────────────────────────────
 
 function ConvergingArrows() {
-  // Two lines from the bottom-center of each input card converging to the top-center of the output
-  const leftX = CARD_W / 2;          // 130 — center of left card
-  const rightX = CARD_W + GAP + CARD_W / 2; // 430 — center of right card
-  const midX = TOTAL_W / 2;          // 280 — center of output zone
+  const leftX = CARD_W / 2;
+  const rightX = CARD_W + GAP + CARD_W / 2;
+  const midX = TOTAL_W / 2;
 
   return (
     <svg
@@ -192,9 +194,7 @@ function OutputZone({ image, isGenerating }: OutputZoneProps) {
       style={{ width: OUT_W, height: OUT_H }}
       className={cn(
         "relative rounded-xl border-2 overflow-hidden transition-colors",
-        image
-          ? "border-stone-200"
-          : "border-dashed border-stone-200 bg-stone-50"
+        image ? "border-stone-200" : "border-dashed border-stone-200 bg-stone-50"
       )}
     >
       {isGenerating ? (
@@ -226,42 +226,140 @@ function OutputZone({ image, isGenerating }: OutputZoneProps) {
   );
 }
 
-// ─── Model Panel ─────────────────────────────────────────────────────────────
+// ─── Settings Panel ───────────────────────────────────────────────────────────
 
-interface ModelPanelProps {
+interface SettingsPanelProps {
   model: ModelId;
-  onChange: (m: ModelId) => void;
+  onModelChange: (m: ModelId) => void;
+  referenceMode: ReferenceMode;
+  onReferenceModeChange: (m: ReferenceMode) => void;
+  hasReference: boolean;
+  prompt: string;
+  onPromptChange: (v: string) => void;
+  onGenerate: () => void;
+  canGenerate: boolean;
+  isGenerating: boolean;
 }
 
-function ModelPanel({ model, onChange }: ModelPanelProps) {
+function SettingsPanel({
+  model,
+  onModelChange,
+  referenceMode,
+  onReferenceModeChange,
+  hasReference,
+  prompt,
+  onPromptChange,
+  onGenerate,
+  canGenerate,
+  isGenerating,
+}: SettingsPanelProps) {
   return (
     <div className="w-72 border-l border-stone-200 bg-white flex flex-col shrink-0 overflow-y-auto">
+      {/* Panel header */}
       <div className="px-4 py-3 border-b border-stone-200 bg-stone-50 shrink-0">
         <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">
-          Generation Model
+          Quick Stage Settings
         </p>
       </div>
-      <div className="px-4 py-3 space-y-2">
-        {GENERATION_MODELS.map((m) => (
-          <button
-            key={m.id}
-            onClick={() => onChange(m.id as ModelId)}
-            className={cn(
-              "w-full text-left px-3 py-2.5 rounded-lg border transition-colors",
-              model === m.id
-                ? "border-sage-300 bg-sage-50 text-sage-800"
-                : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50"
-            )}
-          >
-            <div className="flex items-center justify-between gap-2 mb-0.5">
-              <span className="text-xs font-medium">{m.label}</span>
-              <span className="text-[10px] text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded-full shrink-0">
-                {m.provider}
-              </span>
-            </div>
-            <p className="text-[11px] text-stone-400">{m.note}</p>
-          </button>
-        ))}
+
+      <div className="flex flex-col gap-5 px-4 py-4">
+
+        {/* Reference mode toggle */}
+        <div className={cn("space-y-2", !hasReference && "opacity-40 pointer-events-none")}>
+          <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">
+            Reference Image Is
+          </p>
+          <div className="flex rounded-lg border border-stone-200 overflow-hidden text-xs">
+            <button
+              onClick={() => onReferenceModeChange("same")}
+              className={cn(
+                "flex-1 py-2 px-3 transition-colors text-xs font-medium",
+                referenceMode === "same"
+                  ? "bg-sage-50 text-sage-700"
+                  : "bg-white text-stone-500 hover:bg-stone-50"
+              )}
+            >
+              Same Room
+            </button>
+            <button
+              onClick={() => onReferenceModeChange("different")}
+              className={cn(
+                "flex-1 py-2 px-3 border-l border-stone-200 transition-colors text-xs font-medium",
+                referenceMode === "different"
+                  ? "bg-sage-50 text-sage-700"
+                  : "bg-white text-stone-500 hover:bg-stone-50"
+              )}
+            >
+              Different Room
+            </button>
+          </div>
+          <p className="text-[11px] text-stone-400 leading-snug">
+            {hasReference
+              ? referenceMode === "same"
+                ? "Matches furniture precisely; accounts for objects that may shift out of frame with the angle change."
+                : "Treats the reference as style inspiration; adapts placement and scale to fit this room's layout."
+              : "Add a reference image above to enable this setting."}
+          </p>
+        </div>
+
+        {/* Model selector */}
+        <div className="space-y-2">
+          <p className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">
+            Generation Model
+          </p>
+          <div className="space-y-1.5">
+            {GENERATION_MODELS.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => onModelChange(m.id as ModelId)}
+                className={cn(
+                  "w-full text-left px-3 py-2.5 rounded-lg border transition-colors",
+                  model === m.id
+                    ? "border-sage-300 bg-sage-50 text-sage-800"
+                    : "border-stone-200 bg-white text-stone-700 hover:border-stone-300 hover:bg-stone-50"
+                )}
+              >
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <span className="text-xs font-medium">{m.label}</span>
+                  <span className="text-[10px] text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded-full shrink-0">
+                    {m.provider}
+                  </span>
+                </div>
+                <p className="text-[11px] text-stone-400">{m.note}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Additional instructions + generate button */}
+        <div className="space-y-2">
+          <Label htmlFor="qs-prompt" className="text-[11px] font-medium text-stone-400 uppercase tracking-wide">
+            Additional Instructions
+          </Label>
+          <Textarea
+            id="qs-prompt"
+            value={prompt}
+            onChange={(e) => onPromptChange(e.target.value)}
+            placeholder="e.g. Warm tones, add a rug, Scandinavian style…"
+            className="resize-none h-24 text-sm"
+          />
+        </div>
+
+        <Button
+          onClick={onGenerate}
+          disabled={!canGenerate}
+          className="w-full"
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 size={15} className="animate-spin mr-2" />
+              Furnishing…
+            </>
+          ) : (
+            "Furnish This Room"
+          )}
+        </Button>
+
       </div>
     </div>
   );
@@ -270,22 +368,34 @@ function ModelPanel({ model, onChange }: ModelPanelProps) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function QuickStagePage() {
+  const { data: session } = useSession();
   const [baseImage, setBaseImage] = useState<string | null>(null);
   const [refImage, setRefImage] = useState<string | null>(null);
   const [outputImage, setOutputImage] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState<ModelId>(DEFAULT_MODEL_ID);
+  const [referenceMode, setReferenceMode] = useState<ReferenceMode>("different");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showSignIn, setShowSignIn] = useState(false);
 
   const handleGenerate = async () => {
-    if (!baseImage || !refImage) return;
+    if (!baseImage) return;
+    if (!session?.user) {
+      setShowSignIn(true);
+      return;
+    }
     setIsGenerating(true);
     setOutputImage(null);
     try {
       const res = await fetch("/api/quick-stage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ baseImage, referenceImage: refImage, prompt, model }),
+        body: JSON.stringify({
+          baseImage,
+          ...(refImage ? { referenceImage: refImage, referenceMode } : {}),
+          prompt,
+          model,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
@@ -298,15 +408,13 @@ export default function QuickStagePage() {
     }
   };
 
-  const canGenerate = !!baseImage && !!refImage && !isGenerating;
+  const canGenerate = !!baseImage && !isGenerating;
 
   return (
     <div className="flex h-full overflow-hidden">
       {/* Scrollable main content */}
       <div className="flex-1 overflow-y-auto">
-        <AppHeader breadcrumb={<span className="text-sm text-stone-700">Quick Stage</span>} />
-
-        <div className="flex flex-col items-center px-8 py-10">
+        <div className="flex flex-col items-center px-8 py-12">
           {/* Input images row */}
           <div className="flex items-start" style={{ gap: GAP }}>
             <ImageDropZone
@@ -318,7 +426,7 @@ export default function QuickStagePage() {
             />
             <ImageDropZone
               label="Reference: Furnished Room"
-              sublabel="Style to match"
+              sublabel="Style to match (optional)"
               image={refImage}
               onImage={setRefImage}
               onClear={() => { setRefImage(null); setOutputImage(null); }}
@@ -330,39 +438,28 @@ export default function QuickStagePage() {
 
           {/* Output zone */}
           <OutputZone image={outputImage} isGenerating={isGenerating} />
-
-          {/* Prompt + button */}
-          <div className="mt-6 flex flex-col gap-3" style={{ width: OUT_W }}>
-            <div className="space-y-1.5">
-              <Label htmlFor="qs-prompt">Additional instructions (optional)</Label>
-              <Textarea
-                id="qs-prompt"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="e.g. Use Scandinavian style, warm tones, add a rug…"
-                className="resize-none h-20 text-sm"
-              />
-            </div>
-            <Button
-              onClick={handleGenerate}
-              disabled={!canGenerate}
-              className="w-full"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 size={15} className="animate-spin mr-2" />
-                  Furnishing…
-                </>
-              ) : (
-                "Furnish This Room"
-              )}
-            </Button>
-          </div>
         </div>
       </div>
 
-      {/* Right model selector panel */}
-      <ModelPanel model={model} onChange={setModel} />
+      {/* Right settings panel */}
+      <SettingsPanel
+        model={model}
+        onModelChange={setModel}
+        referenceMode={referenceMode}
+        onReferenceModeChange={setReferenceMode}
+        hasReference={!!refImage}
+        prompt={prompt}
+        onPromptChange={setPrompt}
+        onGenerate={handleGenerate}
+        canGenerate={canGenerate}
+        isGenerating={isGenerating}
+      />
+
+      <SignInModal
+        open={showSignIn}
+        onOpenChange={setShowSignIn}
+        message="Sign in to generate your first staged room."
+      />
     </div>
   );
 }

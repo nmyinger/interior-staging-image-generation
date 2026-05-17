@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { APP_WORDMARK } from "@/lib/constants";
 
 export function SignInPage() {
   return (
@@ -11,7 +12,7 @@ export function SignInPage() {
           <span className="text-white text-lg font-bold">VS</span>
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-stone-800">Virtual Staging</h1>
+          <h1 className="text-xl font-semibold text-stone-800">{APP_WORDMARK}</h1>
           <p className="text-sm text-stone-400">AI-powered interior staging canvas</p>
         </div>
       </div>

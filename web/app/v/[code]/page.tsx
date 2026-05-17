@@ -2,6 +2,7 @@ export const runtime = "edge";
 
 import { neon } from "@neondatabase/serverless";
 import { ReactCompareSlider, ReactCompareSliderImage } from "react-compare-slider";
+import { APP_NAME, APP_WORDMARK } from "@/lib/constants";
 
 export async function generateMetadata() {
   return {
@@ -105,7 +106,7 @@ export default async function DisclosurePage({
         </div>
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-semibold text-stone-800">
-            Virtual Staging
+            {APP_WORDMARK}
           </span>
           <span className="text-stone-300 text-sm">/</span>
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-acacia-100 text-acacia-500 text-xs font-semibold shrink-0">
@@ -254,7 +255,7 @@ export default async function DisclosurePage({
           </p>
           <p className="text-xs text-stone-400 mt-1">
             Powered by{" "}
-            <span className="text-sage-600 font-medium">Virtual Staging</span>
+            <span className="text-sage-600 font-medium">{APP_NAME}</span>
           </p>
         </footer>
       </div>

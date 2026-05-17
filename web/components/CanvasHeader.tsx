@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { UserMenu } from "@/components/UserMenu";
 import { ShareModal } from "@/components/ShareModal";
+import { SignInModal } from "@/components/SignInModal";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, Share2 } from "lucide-react";
 
@@ -25,6 +26,7 @@ export function CanvasHeader({ canvasId, initialName, ownerUserId, propertyId, r
   const [draft, setDraft] = useState(initialName);
   const inputRef = useRef<HTMLInputElement>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showSignIn, setShowSignIn] = useState(false);
 
   const isOwner = (session?.user as { id?: string } | undefined)?.id === ownerUserId;
   const backHref = propertyId ? `/properties/${propertyId}` : "/properties";
@@ -51,7 +53,7 @@ export function CanvasHeader({ canvasId, initialName, ownerUserId, propertyId, r
         body: JSON.stringify({ name: trimmed }),
       });
     }
-  }, [draft, name, canvasId]);
+  }, [draft, name, canvasId, propertyId]);
 
   return (
     <>
@@ -113,7 +115,7 @@ export function CanvasHeader({ canvasId, initialName, ownerUserId, propertyId, r
           {isDemo ? (
             <Button
               size="sm"
-              onClick={() => signIn("google", { callbackUrl: "/properties" })}
+              onClick={() => setShowSignIn(true)}
               className="bg-sage-600 hover:bg-sage-700 text-white"
             >
               Sign in free
@@ -127,6 +129,8 @@ export function CanvasHeader({ canvasId, initialName, ownerUserId, propertyId, r
       {showShareModal && (
         <ShareModal sessionId={canvasId} onClose={() => setShowShareModal(false)} />
       )}
+
+      <SignInModal open={showSignIn} onOpenChange={setShowSignIn} />
     </>
   );
 }

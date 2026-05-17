@@ -1,5 +1,7 @@
 import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
 import type { NextAuthOptions } from "next-auth";
+import bcrypt from "bcryptjs";
 import { sql, migrate } from "@/lib/db";
 import { provisionPersonalOrg } from "@/lib/orgs";
 
@@ -16,6 +18,27 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+    CredentialsProvider({
+      name: "Email",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) return null;
+        await ensureMigrated();
+        const rows = await sql`
+          SELECT id, email, name, image, password_hash
+          FROM users
+          WHERE lower(email) = lower(${credentials.email})
+        `;
+        const user = rows[0];
+        if (!user?.password_hash) return null;
+        const valid = await bcrypt.compare(credentials.password, user.password_hash as string);
+        if (!valid) return null;
+        return { id: user.id as string, email: user.email as string, name: user.name as string, image: user.image as string };
+      },
     }),
   ],
   callbacks: {

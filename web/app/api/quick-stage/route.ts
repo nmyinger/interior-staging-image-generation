@@ -7,11 +7,29 @@ import { canGenerate, recordGeneration, getSubscription } from "@/lib/billing";
 import { getUserOrg } from "@/lib/orgs";
 import { z } from "zod";
 
+const PROMPT_SAME_ROOM =
+  "Furnish the empty room using the same furniture pieces shown in the furnished reference photo. " +
+  "These are photos of the same physical room. " +
+  "Place each piece as it would naturally appear from the empty room's camera angle. " +
+  "Do not add or alter any walls, floors, ceilings, windows, or doors.";
+
+const PROMPT_DIFFERENT_ROOM =
+  "Furnish the empty room by drawing inspiration from the furniture types, materials, colors, and overall aesthetic shown in the furnished reference. " +
+  "Do not replicate the spatial arrangement from the reference — place each piece in a position that fits naturally within the empty room's specific dimensions and layout. " +
+  "Rotate or scale furniture as needed so it works within the empty room's geometry. " +
+  "Do not add, remove, or alter any walls, windows, doors, floors, or other architectural features of the empty room.";
+
+const PROMPT_NO_REFERENCE =
+  "Furnish the empty room with well-chosen furniture appropriate to the room's architecture and proportions. " +
+  "Apply good interior design principles — balance, scale, and flow. " +
+  "Do not add or alter any walls, floors, ceilings, windows, or doors.";
+
 const schema = z.object({
   baseImage: z.string().min(1),
-  referenceImage: z.string().min(1),
+  referenceImage: z.string().min(1).optional(),
   prompt: z.string().max(4096),
   model: z.string().optional(),
+  referenceMode: z.enum(["same", "different"]).optional(),
 });
 
 function extractBase64(str: string): { base64: string; mimeType: string } {
@@ -37,7 +55,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { baseImage, referenceImage, prompt, model: requestedModel } = parsed.data;
+  const { baseImage, referenceImage, prompt, model: requestedModel, referenceMode } = parsed.data;
   const model = ALLOWED_MODEL_IDS.includes(requestedModel as ModelId)
     ? (requestedModel as string)
     : DEFAULT_MODEL_ID;
@@ -54,18 +72,24 @@ export async function POST(req: NextRequest) {
   if (!apiKey) return NextResponse.json({ error: "GEMINI_API_KEY not configured" }, { status: 500 });
 
   const { base64: baseB64, mimeType: baseMime } = extractBase64(baseImage);
-  const { base64: refB64, mimeType: refMime } = extractBase64(referenceImage);
 
-  const userPrompt = prompt.trim()
-    ? `${prompt.trim()}\n\nFurnish the empty room shown in the first image by placing the same furniture, decor style, and arrangement as seen in the second reference image. Preserve the room's original architecture, lighting, and perspective.`
-    : "Furnish the empty room shown in the first image by placing the same furniture, decor style, and arrangement as seen in the second reference image. Preserve the room's original architecture, lighting, and perspective.";
+  const basePrompt = referenceImage
+    ? referenceMode === "same" ? PROMPT_SAME_ROOM : PROMPT_DIFFERENT_ROOM
+    : PROMPT_NO_REFERENCE;
+  const userPrompt = prompt.trim() ? `${prompt.trim()}\n\n${basePrompt}` : basePrompt;
 
   type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
 
+  const refPart = referenceImage ? extractBase64(referenceImage) : null;
+
   const parts: Part[] = [
-    { text: userPrompt },
+    { text: "EMPTY ROOM TO FURNISH:" },
     { inlineData: { mimeType: baseMime, data: baseB64 } },
-    { inlineData: { mimeType: refMime, data: refB64 } },
+    ...(refPart ? [
+      { text: "FURNISHED REFERENCE:" } as Part,
+      { inlineData: { mimeType: refPart.mimeType, data: refPart.base64 } } as Part,
+    ] : []),
+    { text: userPrompt },
   ];
 
   const ai = new GoogleGenAI({ apiKey });

@@ -378,6 +378,12 @@ export async function migrate() {
   `;
 
   // -------------------------------------------------------------------------
+  // Email/password auth
+  // -------------------------------------------------------------------------
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT NULL`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users(lower(email))`;
+
+  // -------------------------------------------------------------------------
   // Unified schema — Phase 0003
   // -------------------------------------------------------------------------
   await sql`ALTER TABLE properties ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'property' CHECK (kind IN ('property', 'scratch'))`;

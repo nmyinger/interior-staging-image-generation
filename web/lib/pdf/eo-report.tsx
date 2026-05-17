@@ -1,4 +1,5 @@
 import React from "react";
+import { APP_NAME } from "@/lib/constants";
 import {
   Document,
   Page,
@@ -441,7 +442,7 @@ export function EoReport({
       title={`E&O Compliance Audit Report — ${orgName}`}
       author={orgName}
       subject="Errors & Omissions Compliance Audit"
-      creator="Virtual Staging Platform"
+      creator={`${APP_NAME} Platform`}
     >
       <Page size="LETTER" style={styles.page}>
         {/* ---------------------------------------------------------------- */}
@@ -455,7 +456,7 @@ export function EoReport({
             </Text>
           </View>
           <View style={styles.headerRight}>
-            <Text style={styles.headerLabel}>Virtual Staging</Text>
+            <Text style={styles.headerLabel}>{APP_NAME}</Text>
             <Text style={styles.headerValue}>
               Generated: {generatedFormatted}
             </Text>

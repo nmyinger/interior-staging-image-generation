@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { UserMenu } from "@/components/UserMenu";
+import { APP_WORDMARK } from "@/lib/constants";
 
 interface AppHeaderProps {
   /** Breadcrumb items after the logo. Pass <span> or <Link> nodes. */
@@ -16,7 +17,7 @@ export function AppHeader({ breadcrumb, actions }: AppHeaderProps) {
           <div className="w-5 h-5 rounded bg-sage-600 flex items-center justify-center">
             <span className="text-white text-[10px] font-bold">VS</span>
           </div>
-          <span className="text-sm font-semibold text-stone-800">Virtual Staging</span>
+          <span className="text-sm font-semibold text-stone-800">{APP_WORDMARK}</span>
         </Link>
         {breadcrumb && (
           <>

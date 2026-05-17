@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { Settings, Building2, LayoutDashboard, LogOut } from "lucide-react";
 import {
@@ -10,10 +11,25 @@ import {
   DropdownMenuLinkItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { SignInModal } from "@/components/SignInModal";
 
 export function UserMenu() {
-  const { data: session } = useSession();
-  if (!session?.user) return null;
+  const { data: session, status } = useSession();
+  const [showSignIn, setShowSignIn] = useState(false);
+
+  if (status === "loading") return null;
+
+  if (!session?.user) {
+    return (
+      <>
+        <Button variant="outline" size="sm" onClick={() => setShowSignIn(true)}>
+          Log in
+        </Button>
+        <SignInModal open={showSignIn} onOpenChange={setShowSignIn} />
+      </>
+    );
+  }
 
   const user = session.user;
   const initials = user.name

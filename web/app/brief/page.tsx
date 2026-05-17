@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { APP_WORDMARK } from "@/lib/constants";
 
 function getNextTuesday(): string {
   const now = new Date();
@@ -56,7 +57,7 @@ export default function BriefPage() {
           <span className="text-white text-[10px] font-bold">VS</span>
         </div>
         <span className="text-sm font-semibold text-stone-800">
-          Virtual Staging
+          {APP_WORDMARK}
         </span>
         <span className="text-stone-300 text-sm">/</span>
         <span className="text-sm text-stone-500">The Disclosure Brief</span>

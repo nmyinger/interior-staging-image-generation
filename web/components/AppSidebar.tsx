@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
@@ -14,6 +15,9 @@ import {
   LogOut,
   Wand2,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { SignInModal } from "@/components/SignInModal";
+import { APP_WORDMARK } from "@/lib/constants";
 
 interface NavItem {
   href: string;
@@ -58,6 +62,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const user = session?.user;
+  const [showSignIn, setShowSignIn] = useState(false);
 
   const initials = user?.name
     ?.split(" ")
@@ -74,7 +79,7 @@ export function AppSidebar() {
           <div className="w-5 h-5 rounded bg-sage-600 flex items-center justify-center">
             <span className="text-white text-[10px] font-bold">VS</span>
           </div>
-          <span className="text-sm font-semibold text-stone-800">Virtual Staging</span>
+          <span className="text-sm font-semibold text-stone-800">{APP_WORDMARK}</span>
         </Link>
       </div>
 
@@ -107,32 +112,45 @@ export function AppSidebar() {
 
       {/* User footer */}
       <div className="border-t border-stone-200 p-3 shrink-0">
-        <div className="flex items-center gap-2.5">
-          {user?.image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={user.image} alt={user.name ?? ""} className="w-7 h-7 rounded-full shrink-0" />
-          ) : (
-            <div className="w-7 h-7 rounded-full bg-stone-200 flex items-center justify-center text-xs font-medium text-stone-600 shrink-0">
-              {initials}
+        {user ? (
+          <div className="flex items-center gap-2.5">
+            {user.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.image} alt={user.name ?? ""} className="w-7 h-7 rounded-full shrink-0" />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-stone-200 flex items-center justify-center text-xs font-medium text-stone-600 shrink-0">
+                {initials}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              {user.name && (
+                <p className="text-xs font-medium text-stone-700 truncate">{user.name}</p>
+              )}
+              {user.email && (
+                <p className="text-[11px] text-stone-400 truncate">{user.email}</p>
+              )}
             </div>
-          )}
-          <div className="min-w-0 flex-1">
-            {user?.name && (
-              <p className="text-xs font-medium text-stone-700 truncate">{user.name}</p>
-            )}
-            {user?.email && (
-              <p className="text-[11px] text-stone-400 truncate">{user.email}</p>
-            )}
+            <button
+              onClick={() => signOut()}
+              className="shrink-0 text-stone-400 hover:text-stone-600 transition-colors"
+              title="Sign out"
+            >
+              <LogOut size={14} />
+            </button>
           </div>
-          <button
-            onClick={() => signOut()}
-            className="shrink-0 text-stone-400 hover:text-stone-600 transition-colors"
-            title="Sign out"
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => setShowSignIn(true)}
           >
-            <LogOut size={14} />
-          </button>
-        </div>
+            Log in
+          </Button>
+        )}
       </div>
+
+      <SignInModal open={showSignIn} onOpenChange={setShowSignIn} />
     </aside>
   );
 }

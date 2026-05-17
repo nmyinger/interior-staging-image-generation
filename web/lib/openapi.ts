@@ -4,6 +4,7 @@ import {
   extendZodWithOpenApi,
 } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
+import { APP_NAME } from '@/lib/constants';
 
 extendZodWithOpenApi(z);
 
@@ -439,7 +440,7 @@ export function generateOpenApiSpec() {
   return generator.generateDocument({
     openapi: '3.0.0',
     info: {
-      title: 'Virtual Staging API',
+      title: `${APP_NAME} API`,
       version: '1.0.0',
       description:
         'AI virtual staging for real estate photographers and brokerages. Batch-submit an entire property shoot in one API call — get back staged images with AB 723 compliance metadata.\n\nBase URL: `https://staging.altitudedp.com`\n\n**Authentication:** All endpoints (except key management) require a Bearer token. Generate a key at `/admin/api-keys`.',

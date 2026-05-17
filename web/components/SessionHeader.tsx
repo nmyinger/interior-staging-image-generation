@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { UserMenu } from "@/components/UserMenu";
 import { ShareModal } from "@/components/ShareModal";
 import { ChevronRight, Share2 } from "lucide-react";
+import { APP_WORDMARK } from "@/lib/constants";
 
 interface SessionHeaderProps {
   sessionId: string;
@@ -56,7 +57,7 @@ export function SessionHeader({ sessionId, initialName, ownerUserId, readOnly }:
           <div className="w-5 h-5 rounded bg-sage-600 flex items-center justify-center shrink-0">
             <span className="text-white text-[10px] font-bold">VS</span>
           </div>
-          <span className="text-xs text-stone-500 hidden sm:block">Virtual Staging</span>
+          <span className="text-xs text-stone-500 hidden sm:block">{APP_WORDMARK}</span>
         </button>
 
         <ChevronRight size={14} className="text-stone-300 shrink-0" />
