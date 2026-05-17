@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql, genId } from "@/lib/db";
+import { storeInlineAsset } from "@/lib/storage";
 
 function getUid(session: unknown): string | null {
   return (session as { user?: { id?: string } } | null)?.user?.id ?? null;
@@ -121,7 +122,7 @@ export async function POST(
 
     // Verify the photo exists and belongs to this user
     const photoRows = await sql`
-      SELECT filename, room_type, zone, mime_type, image_url, original_url
+      SELECT filename, room_type, zone, mime_type, image_url, original_url, image_b64
       FROM photos
       WHERE filename = ${filename} AND user_id = ${uid}
     `;
@@ -155,20 +156,31 @@ export async function POST(
     `;
 
     // Dual-write to unified assets table
-    const blobUrl = (photo.image_url as string | null) ?? "";
-    if (blobUrl) {
-      const orgId = property.org_id as string;
+    const assetId = "ast_pp_" + id;
+    const orgId = property.org_id as string;
+    let assetBlobUrl = (photo.image_url as string | null) ?? null;
+
+    // Dev fallback: if no blob URL, store the base64 inline so the asset survives reloads
+    if (!assetBlobUrl && photo.image_b64) {
+      assetBlobUrl = await storeInlineAsset(
+        assetId,
+        photo.image_b64 as string,
+        (photo.mime_type as string | null) ?? "image/jpeg"
+      );
+    }
+
+    if (assetBlobUrl) {
       await sql`
         INSERT INTO assets (id, org_id, property_id, room_id, kind, mime_type, blob_url, original_url,
                             zone, room_type, position, uploaded_by)
         VALUES (
-          ${"ast_pp_" + id},
+          ${assetId},
           ${orgId},
           ${propertyId},
           ${roomId},
           'source',
           ${(photo.mime_type as string | null) ?? "image/jpeg"},
-          ${blobUrl},
+          ${assetBlobUrl},
           ${(photo.original_url as string | null) ?? null},
           ${(photo.zone as string | null) ?? null},
           ${(photo.room_type as string | null) ?? null},
