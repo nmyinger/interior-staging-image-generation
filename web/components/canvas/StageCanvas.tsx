@@ -372,16 +372,47 @@ export function StageCanvas({ sessionId, propertyId, readOnly, isDemo }: { sessi
         const { photo } = await res.json();
 
         // Always route through the proxy for consistent sharp resizing.
-        // Raw blob URLs don't support ?width= transforms; the proxy fetches + resizes.
         const finalUrl = `/api/photos/${encodeURIComponent(photo.filename)}?w=300`;
 
-        setNodes(nds =>
-          nds.map(n =>
-            n.id === nodeId
-              ? { ...n, data: { filename: photo.filename, photoUrl: finalUrl } as unknown as Record<string, unknown> }
-              : n
-          )
-        );
+        if (propertyId) {
+          // Link to property → creates asset record, returns the property_photo ID.
+          // Replace the temporary node with the correct asset-ID node so canvas positions
+          // save under the right entity_id and reload produces the same node.
+          const ppRes = await fetch(`/api/properties/${propertyId}/photos`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: photo.filename }),
+          });
+          if (ppRes.ok) {
+            const pp = await ppRes.json() as { id: string };
+            const assetId = `ast_pp_${pp.id}`;
+            setNodes(nds => {
+              const existing = nds.find(n => n.id === nodeId);
+              if (!existing) return nds;
+              return [
+                ...nds.filter(n => n.id !== nodeId),
+                { ...existing, id: assetId, data: { filename: photo.filename, photoUrl: finalUrl, assetId, blobUrl: undefined } as unknown as Record<string, unknown> },
+              ];
+            });
+          } else {
+            // Property POST failed — keep random ID but still show the photo
+            setNodes(nds =>
+              nds.map(n =>
+                n.id === nodeId
+                  ? { ...n, data: { filename: photo.filename, photoUrl: finalUrl } as unknown as Record<string, unknown> }
+                  : n
+              )
+            );
+          }
+        } else {
+          setNodes(nds =>
+            nds.map(n =>
+              n.id === nodeId
+                ? { ...n, data: { filename: photo.filename, photoUrl: finalUrl } as unknown as Record<string, unknown> }
+                : n
+            )
+          );
+        }
       } catch (err) {
         setNodes(nds => nds.filter(n => n.id !== nodeId));
         history.current.pop();
