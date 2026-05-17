@@ -57,11 +57,25 @@ export async function GET(req: NextRequest) {
   }
 
   const [assetRows, genRows, layoutRows] = await Promise.all([
+    // Use property_photos as the source of truth: always present when a photo is added.
+    // LEFT JOIN assets to get blob_url (may be absent for dev/b64 uploads or pre-migration rows).
+    // LEFT JOIN photos for a filename fallback so StageCanvas can serve via /api/photos/[filename].
     sql`
-      SELECT id, kind, blob_url, mime_type, sha256, zone, room_type, room_id, is_hero, position
-      FROM assets
-      WHERE property_id = ${propertyId} AND kind = 'source'
-      ORDER BY position ASC
+      SELECT
+        COALESCE(a.id, 'ast_pp_' || pp.id) AS id,
+        a.blob_url,
+        COALESCE(a.mime_type, p.mime_type) AS mime_type,
+        pp.zone,
+        pp.room_type,
+        pp.room_id,
+        pp.is_hero,
+        COALESCE(a.position, pp.position)::int AS position,
+        pp.photo_filename
+      FROM property_photos pp
+      LEFT JOIN assets a ON a.id = 'ast_pp_' || pp.id AND a.property_id = ${propertyId}
+      LEFT JOIN photos p ON p.filename = pp.photo_filename
+      WHERE pp.property_id = ${propertyId}
+      ORDER BY COALESCE(a.position, pp.position) ASC
     `,
     sql`
       SELECT
@@ -110,14 +124,15 @@ export async function GET(req: NextRequest) {
     return p;
   };
 
-  // Photo nodes (one per source asset)
+  // Photo nodes (one per source photo)
   const photoNodes = assetRows.map((a) => ({
     id: a.id as string,
     type: "photo",
     position: autoPos("asset", a.id as string),
     data: {
       assetId: a.id as string,
-      blobUrl: a.blob_url as string | null,
+      blobUrl: (a.blob_url as string | null) ?? undefined,
+      filename: (a.photo_filename as string | null) ?? undefined,
       mimeType: a.mime_type as string,
       zone: a.zone as string | null,
       roomType: a.room_type as string | null,
