@@ -16,6 +16,12 @@ export default async function CanvasPage({ params }: { params: Promise<{ id: str
   const uid = (authSession?.user as { id?: string } | undefined)?.id ?? null;
   const email = (authSession?.user as { email?: string } | undefined)?.email ?? null;
 
+  // Redirect sessions that have been migrated to the unified model
+  const legacyRows = await sql`SELECT property_id FROM sessions_legacy WHERE session_id = ${id}`;
+  if (legacyRows.length) {
+    redirect(`/properties/${legacyRows[0].property_id as string}/canvas`);
+  }
+
   const access = await resolveAccess(id, uid, email);
 
   if (access.role === "none") notFound();
