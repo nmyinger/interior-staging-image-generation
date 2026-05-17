@@ -369,7 +369,7 @@ export function RoomCard({
 
 function blobProxyUrl(url: string | null | undefined, w: number): string | null {
   if (!url) return null;
-  if (!url.startsWith("http")) return url;
+  if (!url.startsWith("http") || url.includes("/api/assets/")) return url;
   return `/api/blob-proxy?url=${encodeURIComponent(url)}&w=${w}`;
 }
 
