@@ -2,7 +2,14 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [{ key: "Referrer-Policy", value: "origin-when-cross-origin" }],
+      },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {
