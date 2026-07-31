@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
@@ -17,7 +18,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SignInModal } from "@/components/SignInModal";
-import { APP_WORDMARK } from "@/lib/constants";
 
 interface NavItem {
   href: string;
@@ -75,11 +75,15 @@ export function AppSidebar() {
     <aside className="flex flex-col h-full w-56 bg-white border-r border-stone-200 shrink-0">
       {/* Logo */}
       <div className="h-12 flex items-center px-4 border-b border-stone-200 shrink-0">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded bg-sage-600 flex items-center justify-center">
-            <span className="text-white text-[10px] font-bold">VS</span>
-          </div>
-          <span className="text-sm font-semibold text-stone-800">{APP_WORDMARK}</span>
+        <Link href="/" className="flex items-center" aria-label="VS Room home">
+          <Image
+            src="/brand/vs-room-logo.png"
+            alt="VS Room"
+            width={810}
+            height={211}
+            className="h-7 w-auto"
+            priority
+          />
         </Link>
       </div>
 

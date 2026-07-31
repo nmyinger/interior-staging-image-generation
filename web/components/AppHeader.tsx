@@ -1,6 +1,6 @@
+import Image from "next/image";
 import Link from "next/link";
 import { UserMenu } from "@/components/UserMenu";
-import { APP_WORDMARK } from "@/lib/constants";
 
 interface AppHeaderProps {
   /** Breadcrumb items after the logo. Pass <span> or <Link> nodes. */
@@ -11,13 +11,17 @@ interface AppHeaderProps {
 
 export function AppHeader({ breadcrumb, actions }: AppHeaderProps) {
   return (
-    <header className="h-12 bg-stone-50 border-b border-stone-200 flex items-center px-4 shrink-0 sticky top-0 z-10">
+    <header className="h-12 bg-stone-50 border-b border-stone-200 flex items-center px-4 shrink-0 sticky top-0 z-[var(--z-header)]">
       <div className="flex items-center gap-2 min-w-0">
-        <Link href="/" className="flex items-center gap-2 shrink-0">
-          <div className="w-5 h-5 rounded bg-sage-600 flex items-center justify-center">
-            <span className="text-white text-[10px] font-bold">VS</span>
-          </div>
-          <span className="text-sm font-semibold text-stone-800">{APP_WORDMARK}</span>
+        <Link href="/" className="flex items-center shrink-0" aria-label="VS Room home">
+          <Image
+            src="/brand/vs-room-logo.png"
+            alt="VS Room"
+            width={810}
+            height={211}
+            className="h-7 w-auto"
+            priority
+          />
         </Link>
         {breadcrumb && (
           <>
